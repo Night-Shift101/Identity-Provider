@@ -1,0 +1,193 @@
+// IdP System Database Schema
+// Comprehensive Identity Provider with authentication, security, and device management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Core User Model
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String?  @unique
+  password  String?  // Nullable for OAuth-only users
+  firstName String?
+  lastName  String?
+  avatar    String?
+  
+  // Account Status
+  isActive       Boolean @default(true)
+  isVerified     Boolean @default(false)
+  emailVerified  DateTime?
+  
+  // Security Settings
+  mfaEnabled     Boolean @default(false)
+  mfaSecret      String? // TOTP secret
+  mfaBackupCodes Json?   // Array of backup codes
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+  
+  // Relations
+  sessions         Session[]
+  loginActivity    LoginActivity[]
+  trustedDevices   TrustedDevice[]
+  refreshTokens    RefreshToken[]
+  oauthAccounts    OAuthAccount[]
+  webauthnCreds    WebAuthnCredential[]
+  securityLogs     SecurityLog[]
+  emailTokens      EmailToken[]
+  
+  @@map("users")
+}
+
+// Session Management
+model Session {
+  id        String   @id @default(uuid())
+  sessionToken String @unique
+  userId    String
+  expires   DateTime
+  ipAddress String?
+  userAgent String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+// Refresh Token for JWT Auth
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("refresh_tokens")
+}
+
+// Login Activity Monitoring
+model LoginActivity {
+  id          String   @id @default(uuid())
+  userId      String
+  ipAddress   String
+  userAgent   String?
+  location    String?  // Derived from IP
+  country     String?
+  city        String?
+  success     Boolean  @default(true)
+  failureReason String?
+  timestamp   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("login_activity")
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// Trusted Device Management
+model TrustedDevice {
+  id          String   @id @default(uuid())
+  userId      String
+  deviceId    String   // Browser fingerprint or stored identifier
+  fingerprint String   // Device fingerprint hash
+  name        String?  // User-assigned name
+  userAgent   String
+  ipAddress   String
+  lastSeen    DateTime @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, deviceId])
+  @@map("trusted_devices")
+}
+
+// OAuth Account Linking
+model OAuthAccount {
+  id                String  @id @default(uuid())
+  userId            String
+  provider          String  // google, github, etc.
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  tokenType         String?
+  scope             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
+// WebAuthn/Passkey Credentials
+model WebAuthnCredential {
+  id            String  @id @default(uuid())
+  userId        String
+  credentialId  String  @unique
+  publicKey     String
+  counter       Int     @default(0)
+  deviceType    String?
+  name          String? // User-assigned name
+  createdAt     DateTime @default(now())
+  lastUsed      DateTime?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("webauthn_credentials")
+}
+
+// Security Event Logging
+model SecurityLog {
+  id        String   @id @default(uuid())
+  userId    String?  // Nullable for failed login attempts
+  event     String   // login_success, login_fail, mfa_enabled, etc.
+  details   Json?    // Additional event data
+  ipAddress String
+  userAgent String?
+  timestamp DateTime @default(now())
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("security_logs")
+  @@index([userId])
+  @@index([event])
+  @@index([timestamp])
+}
+
+// Email Verification & Password Reset Tokens
+model EmailToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  type      TokenType
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  userId    String?
+  createdAt DateTime @default(now())
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("email_tokens")
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  LOGIN_MAGIC_LINK
+}

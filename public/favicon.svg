@@ -1,0 +1,8 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="4" fill="#2563eb"/>
+  <path d="M16 6L10 8V16C10 20 16 24 16 24S22 20 22 16V8L16 6Z" fill="white"/>
+  <circle cx="14" cy="13" r="1.5" fill="#2563eb"/>
+  <rect x="15" y="14" width="1" height="4" rx="0.5" fill="#2563eb"/>
+  <rect x="15" y="17" width="2" height="1" rx="0.5" fill="#2563eb"/>
+  <text x="16" y="30" font-family="Arial" font-size="4" font-weight="bold" text-anchor="middle" fill="white">IdP</text>
+</svg>

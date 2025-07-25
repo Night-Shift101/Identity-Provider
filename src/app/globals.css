@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Remove problematic CSS custom properties that conflict with Tailwind */
+body {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
+  background-color: #f9fafb;
+}
+
+/* Ensure input text is always visible and black */
+input, textarea, select {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* Fix for grayed out placeholder text */
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1;
+}
+
+/* Ensure text is always black and visible on light backgrounds */
+.text-black {
+  color: #000000 !important;
+}
+
+.text-gray-900 {
+  color: #111827 !important;
+}
+
+.text-gray-800 {
+  color: #1f2937 !important;
+}
+
+.text-gray-700 {
+  color: #374151 !important;
+}
+
+.text-gray-600 {
+  color: #4b5563 !important;
+}
+
+.text-gray-500 {
+  color: #6b7280 !important;
+}
+
+/* Ensure proper text colors for all elements */
+h1, h2, h3, h4, h5, h6 {
+  color: #111827;
+}
+
+p {
+  color: #374151;
+}
+
+/* Button text should be proper colors */
+button {
+  color: inherit;
+}
+
+/* Links should be readable */
+a {
+  color: #2563eb;
+}
+
+a:hover {
+  color: #1d4ed8;
+}
