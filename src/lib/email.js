@@ -5,46 +5,181 @@
  */
 
 import nodemailer from 'nodemailer';
+import { validateEmailConfig, isProduction, getSafeConfig } from '@/lib/config-validation';
+import { checkRateLimit, recordRateLimitAttempt } from '@/lib/rate-limit';
+import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
+
+// Validate email configuration on module load
+const emailConfigValidation = validateEmailConfig();
+if (!emailConfigValidation.success) {
+  console.error('Email service configuration error:', emailConfigValidation.error);
+  if (isProduction()) {
+    throw new Error(`Email service misconfigured: ${emailConfigValidation.error}`);
+  }
+}
+
+// Get safe configuration
+const config = getSafeConfig();
 
 /**
- * Create email transporter
- * @returns {Object} - Nodemailer transporter
+ * Create email transporter with validated configuration and security options
+ * @returns {{ success: boolean, error: string|null, data?: Object }} Structured response with transporter
+ * @author IdP System
  */
 function createTransporter() {
-  // TODO: SECURITY - Add email rate limiting and anti-spam measures
-  // TODO: SECURITY - Implement email template sanitization
-  // TODO: RELIABILITY - Add email delivery retry logic and queue system
-  // TODO: MONITORING - Add email delivery monitoring and alerts
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT, 10) || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  try {
+    // Re-validate configuration to ensure it's still valid
+    const validation = validateEmailConfig();
+    if (!validation.success) {
+      return {
+        success: false,
+        error: `Email configuration invalid: ${validation.error}`,
+        data: null
+      };
+    }
+
+    const transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT, 10),
+      secure: parseInt(process.env.SMTP_PORT, 10) === 465, // true for 465, false for other ports
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      // Security options
+      requireTLS: true,
+      tls: {
+        rejectUnauthorized: isProduction(), // Only reject in production
+        minVersion: 'TLSv1.2'
+      },
+      // Connection limits for anti-spam
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      // Timeout settings
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 30000,
+      socketTimeout: 60000
+    });
+
+    return {
+      success: true,
+      error: null,
+      data: transporter
+    };
+  } catch (error) {
+    console.error('Transporter creation error:', error);
+    return {
+      success: false,
+      error: 'Failed to create email transporter',
+      data: null
+    };
+  }
 }
 
 /**
- * Send email verification
- * @param {string} email - Recipient email
- * @param {string} verificationToken - Verification token
- * @param {string} [firstName] - User's first name
- * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * Sanitize email content to prevent XSS and injection attacks
+ * @param {string} content - Raw content to sanitize
+ * @returns {string} Sanitized content safe for email templates
+ * @author IdP System
  */
-export async function sendEmailVerification(email, verificationToken, firstName) {
+function sanitizeEmailContent(content) {
+  if (!content || typeof content !== 'string') {
+    return '';
+  }
+  
+  // Basic HTML entity encoding for security
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
+ * Check email rate limits before sending
+ * @param {string} recipientEmail - Email address of recipient
+ * @param {string} senderIP - IP address of sender for rate limiting
+ * @returns {{ success: boolean, error: string|null }} Rate limit check result
+ * @author IdP System
+ */
+function checkEmailRateLimit(recipientEmail, senderIP) {
+  // Check IP-based rate limit
+  const ipLimit = checkRateLimit('EMAIL_SEND_PER_IP', senderIP);
+  if (!ipLimit.success) {
+    return ipLimit;
+  }
+  
+  // Check recipient-based rate limit
+  const emailLimit = checkRateLimit('EMAIL_SEND_PER_EMAIL', recipientEmail);
+  if (!emailLimit.success) {
+    return emailLimit;
+  }
+  
+  return { success: true, error: null };
+}
+
+/**
+ * Record email sending attempt for rate limiting tracking
+ * @param {string} recipientEmail - Email address of recipient
+ * @param {string} senderIP - IP address of sender
+ * @author IdP System
+ */
+function recordEmailAttempt(recipientEmail, senderIP) {
+  recordRateLimitAttempt('EMAIL_SEND_PER_IP', senderIP);
+  recordRateLimitAttempt('EMAIL_SEND_PER_EMAIL', recipientEmail);
+}
+
+/**
+ * Send email verification with rate limiting and security measures
+ * @param {string} email - Recipient email address
+ * @param {string} verificationToken - Verification token
+ * @param {string} [firstName] - User's first name for personalization
+ * @param {string} [senderIP] - IP address of sender for rate limiting
+ * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * @author IdP System
+ */
+export async function sendEmailVerification(email, verificationToken, firstName, senderIP = '127.0.0.1') {
   try {
-    const transporter = createTransporter();
-    // TODO: SECURITY-Critical - Add validation for required environment variables 
-    const appName = process.env.APP_NAME || 'Identity Provider';
-    // TODO: SECURITY-Critical - Don't hardcode localhost fallback in production
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const verificationUrl = `${appUrl}/auth/verify-email?token=${verificationToken}`;
+    // Check rate limits first
+    const rateLimitCheck = checkEmailRateLimit(email, senderIP);
+    if (!rateLimitCheck.success) {
+      return rateLimitCheck;
+    }
+
+    // Create transporter with validation
+    const transporterResult = createTransporter();
+    if (!transporterResult.success) {
+      recordEmailAttempt(email, senderIP);
+      return transporterResult;
+    }
+
+    const transporter = transporterResult.data;
+    
+    // Use validated configuration
+    const appName = sanitizeEmailContent(config.appName);
+    const appUrl = config.appUrl;
+    const sanitizedFirstName = firstName ? sanitizeEmailContent(firstName.trim()) : '';
+    const sanitizedEmail = email.trim().toLowerCase();
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      recordEmailAttempt(email, senderIP);
+      return {
+        success: false,
+        error: 'Invalid email format',
+        data: null
+      };
+    }
+
+    const verificationUrl = `${appUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
     
     const mailOptions = {
       from: process.env.EMAIL_FROM,
-      to: email,
+      to: sanitizedEmail,
       subject: `Verify your ${appName} account`,
       html: `
         <!DOCTYPE html>
@@ -60,7 +195,7 @@ export async function sendEmailVerification(email, verificationToken, firstName)
           </div>
           
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
-            <h2 style="color: #495057; margin-top: 0;">Welcome${firstName ? `, ${firstName}` : ''}!</h2>
+            <h2 style="color: #495057; margin-top: 0;">Welcome${sanitizedFirstName ? `, ${sanitizedFirstName}` : ''}!</h2>
             
             <p>Thank you for creating an account with ${appName}. To complete your registration, please verify your email address by clicking the button below:</p>
             
@@ -84,37 +219,78 @@ export async function sendEmailVerification(email, verificationToken, firstName)
 
     const info = await transporter.sendMail(mailOptions);
 
+    // Record successful email send for rate limiting
+    recordEmailAttempt(email, senderIP);
+
     return {
       success: true,
       error: null,
-      data: { messageId: info.messageId }
+      data: { 
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected
+      }
     };
   } catch (err) {
+    console.error('Email verification sending error:', err);
+    recordEmailAttempt(email, senderIP);
+    
     return {
       success: false,
-      error: err?.message || 'Email sending failed',
+      error: err?.message || 'Failed to send verification email',
       data: null
     };
   }
 }
 
 /**
- * Send password reset email
- * @param {string} email - Recipient email
+ * Send password reset email with rate limiting and security measures
+ * @param {string} email - Recipient email address
  * @param {string} resetToken - Password reset token
- * @param {string} [firstName] - User's first name
+ * @param {string} [firstName] - User's first name for personalization
+ * @param {string} [senderIP] - IP address of sender for rate limiting
  * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * @author IdP System
  */
-export async function sendPasswordReset(email, resetToken, firstName) {
+export async function sendPasswordReset(email, resetToken, firstName, senderIP = '127.0.0.1') {
   try {
-    const transporter = createTransporter();
-    const appName = process.env.APP_NAME || 'Identity Provider';
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const resetUrl = `${appUrl}/auth/reset-password?token=${resetToken}`;
+    // Check rate limits first
+    const rateLimitCheck = checkEmailRateLimit(email, senderIP);
+    if (!rateLimitCheck.success) {
+      return rateLimitCheck;
+    }
+
+    // Create transporter with validation
+    const transporterResult = createTransporter();
+    if (!transporterResult.success) {
+      recordEmailAttempt(email, senderIP);
+      return transporterResult;
+    }
+
+    const transporter = transporterResult.data;
+    
+    // Use validated configuration
+    const appName = sanitizeEmailContent(config.appName);
+    const appUrl = config.appUrl;
+    const sanitizedFirstName = firstName ? sanitizeEmailContent(firstName.trim()) : '';
+    const sanitizedEmail = email.trim().toLowerCase();
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      recordEmailAttempt(email, senderIP);
+      return {
+        success: false,
+        error: 'Invalid email format',
+        data: null
+      };
+    }
+
+    const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
     
     const mailOptions = {
       from: process.env.EMAIL_FROM,
-      to: email,
+      to: sanitizedEmail,
       subject: `Reset your ${appName} password`,
       html: `
         <!DOCTYPE html>
@@ -132,7 +308,7 @@ export async function sendPasswordReset(email, resetToken, firstName) {
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
             <h2 style="color: #495057; margin-top: 0;">Password Reset Request</h2>
             
-            <p>Hello${firstName ? `, ${firstName}` : ''},</p>
+            <p>Hello${sanitizedFirstName ? `, ${sanitizedFirstName}` : ''},</p>
             <p>We received a request to reset your password for your ${appName} account. Click the button below to set a new password:</p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -170,20 +346,51 @@ export async function sendPasswordReset(email, resetToken, firstName) {
 }
 
 /**
- * Send security alert email
- * @param {string} email - Recipient email
- * @param {Object} alertData - Alert data
+ * Send security alert email with rate limiting and security measures
+ * @param {string} email - Recipient email address
+ * @param {Object} alertData - Security alert information
+ * @param {string} [senderIP] - IP address of sender for rate limiting
  * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * @author IdP System
  */
-export async function sendSecurityAlert(email, alertData) {
+export async function sendSecurityAlert(email, alertData, senderIP = '127.0.0.1') {
   try {
-    const transporter = createTransporter();
-    const appName = process.env.APP_NAME || 'Identity Provider';
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    // Check rate limits first
+    const rateLimitCheck = checkEmailRateLimit(email, senderIP);
+    if (!rateLimitCheck.success) {
+      return rateLimitCheck;
+    }
+
+    // Create transporter with validation
+    const transporterResult = createTransporter();
+    if (!transporterResult.success) {
+      recordEmailAttempt(email, senderIP);
+      return transporterResult;
+    }
+
+    const transporter = transporterResult.data;
+    
+    // Use validated configuration and sanitize inputs
+    const appName = sanitizeEmailContent(config.appName);
+    const appUrl = config.appUrl;
+    const sanitizedEmail = email.trim().toLowerCase();
+    const sanitizedTitle = sanitizeEmailContent(alertData.title || 'Security Alert');
+    const sanitizedMessage = sanitizeEmailContent(alertData.message || 'Suspicious activity detected');
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      recordEmailAttempt(email, senderIP);
+      return {
+        success: false,
+        error: 'Invalid email format',
+        data: null
+      };
+    }
     
     const mailOptions = {
       from: process.env.EMAIL_FROM,
-      to: email,
+      to: sanitizedEmail,
       subject: `Security Alert - ${appName}`,
       html: `
         <!DOCTYPE html>
