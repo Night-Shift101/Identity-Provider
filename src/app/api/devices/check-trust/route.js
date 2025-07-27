@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/database';
-import { validateJWT } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-helpers';
 import { checkRateLimit, recordRateLimitAttempt } from '@/lib/rate-limit';
 import { getClientIP } from '@/lib/security';
 import crypto from 'crypto';
@@ -30,36 +30,24 @@ export async function POST(request) {
       }, { status: 429 });
     }
 
+    // Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+      return authResult; // Return auth error response
+    }
+
+    const { user } = authResult;
+    const userId = user.id;
+
     // Parse request body
-    const { userId, deviceFingerprint } = await request.json();
+    const { deviceFingerprint } = await request.json();
 
-    if (!userId || !deviceFingerprint) {
+    if (!deviceFingerprint) {
       recordRateLimitAttempt('DEVICE_CHECK_PER_IP', clientIP);
       return NextResponse.json({
         success: false,
-        error: 'Missing required parameters: userId and deviceFingerprint'
+        error: 'Missing required parameter: deviceFingerprint'
       }, { status: 400 });
-    }
-
-    // Validate user session (optional - for authenticated requests)
-    const authHeader = request.headers.get('authorization');
-    let sessionUserId = null;
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const sessionValidation = await validateJWT(token);
-      if (sessionValidation.success) {
-        sessionUserId = sessionValidation.data.userId;
-      }
-    }
-
-    // Security check: ensure user can only check their own devices (if authenticated)
-    if (sessionUserId && sessionUserId !== userId) {
-      recordRateLimitAttempt('DEVICE_CHECK_PER_IP', clientIP);
-      return NextResponse.json({
-        success: false,
-        error: 'Unauthorized: Cannot check devices for other users'
-      }, { status: 403 });
     }
 
     // Hash the device fingerprint for secure storage
@@ -138,36 +126,24 @@ export async function PUT(request) {
       }, { status: 429 });
     }
 
+    // Require authentication for device registration
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+      return authResult; // Return auth error response
+    }
+
+    const { user } = authResult;
+    const userId = user.id;
+
     // Parse request body
-    const { userId, deviceFingerprint, deviceName, metadata } = await request.json();
+    const { deviceFingerprint, deviceName, metadata } = await request.json();
 
-    if (!userId || !deviceFingerprint) {
+    if (!deviceFingerprint) {
       recordRateLimitAttempt('DEVICE_REGISTER_PER_IP', clientIP);
       return NextResponse.json({
         success: false,
-        error: 'Missing required parameters: userId and deviceFingerprint'
+        error: 'Missing required parameter: deviceFingerprint'
       }, { status: 400 });
-    }
-
-    // Validate user session - device registration requires authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      recordRateLimitAttempt('DEVICE_REGISTER_PER_IP', clientIP);
-      return NextResponse.json({
-        success: false,
-        error: 'Authentication required for device registration'
-      }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const sessionValidation = await validateJWT(token);
-    
-    if (!sessionValidation.success || sessionValidation.data.userId !== userId) {
-      recordRateLimitAttempt('DEVICE_REGISTER_PER_IP', clientIP);
-      return NextResponse.json({
-        success: false,
-        error: 'Invalid authentication or unauthorized user'
-      }, { status: 403 });
     }
 
     // Hash the device fingerprint for secure storage
@@ -249,36 +225,24 @@ export async function DELETE(request) {
       }, { status: 429 });
     }
 
+    // Require authentication for device revocation
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) {
+      return authResult; // Return auth error response
+    }
+
+    const { user } = authResult;
+    const userId = user.id;
+
     // Parse request body
-    const { userId, deviceId } = await request.json();
+    const { deviceId } = await request.json();
 
-    if (!userId || !deviceId) {
+    if (!deviceId) {
       recordRateLimitAttempt('DEVICE_REVOKE_PER_IP', clientIP);
       return NextResponse.json({
         success: false,
-        error: 'Missing required parameters: userId and deviceId'
+        error: 'Missing required parameter: deviceId'
       }, { status: 400 });
-    }
-
-    // Validate user session - device revocation requires authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      recordRateLimitAttempt('DEVICE_REVOKE_PER_IP', clientIP);
-      return NextResponse.json({
-        success: false,
-        error: 'Authentication required for device revocation'
-      }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const sessionValidation = await validateJWT(token);
-    
-    if (!sessionValidation.success || sessionValidation.data.userId !== userId) {
-      recordRateLimitAttempt('DEVICE_REVOKE_PER_IP', clientIP);
-      return NextResponse.json({
-        success: false,
-        error: 'Invalid authentication or unauthorized user'
-      }, { status: 403 });
     }
 
     // Revoke device trust
