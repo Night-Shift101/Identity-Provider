@@ -64,8 +64,6 @@ export async function verifyPassword(password, hash) {
  */
 export async function generateAccessToken(payload, expiresIn = '15m') {
   try {
-    // TODO: SECURITY - Add startup validation for JWT_SECRET instead of runtime check
-    // TODO: SECURITY - Consider rotating JWT secrets and key versioning
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       return {
@@ -98,8 +96,6 @@ export async function generateAccessToken(payload, expiresIn = '15m') {
  */
 export async function verifyAccessToken(token) {
   try {
-    // TODO: SECURITY - Add startup validation for JWT_SECRET instead of runtime check
-    // TODO: SECURITY - Implement token blacklisting for logout/revocation
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       return {
@@ -208,4 +204,18 @@ export function validatePassword(password) {
     isValid: errors.length === 0,
     errors
   };
+}
+
+/**
+ * Validates JWT secret configuration at startup
+ * @throws {Error} If JWT_SECRET is missing or inadequate
+ */
+export function validateJWTConfig() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  if (secret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters long for security');
+  }
 }
