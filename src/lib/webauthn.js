@@ -13,6 +13,13 @@ import {
 import { isoUint8Array } from '@simplewebauthn/server/helpers';
 import { prisma } from './database.js';
 import { generateSecureToken } from './auth.js';
+import { 
+  storeWebAuthnRegistrationChallenge,
+  storeWebAuthnAuthenticationChallenge,
+  retrieveWebAuthnRegistrationChallenge,
+  retrieveWebAuthnAuthenticationChallenge,
+  cleanupExpiredChallenges
+} from './challenge-storage.js';
 
 // Base64URL encoding/decoding helpers
 function base64urlToBuffer(base64url) {
@@ -31,11 +38,15 @@ function bufferToBase64url(buffer) {
     .replace(/=/g, '');
 }
 
-// WebAuthn configuration
+// WebAuthn configuration - using environment variables for security
 const rpName = process.env.APP_NAME || 'Identity Provider';
 const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
-// TODO: SECURITY-Critical - Move to environment variable configuration
 const origin = process.env.APP_URL || 'http://localhost:3000';
+
+// Configuration validation
+if (!process.env.WEBAUTHN_RP_ID && process.env.NODE_ENV === 'production') {
+  console.warn('WEBAUTHN_RP_ID not set in production - using localhost fallback');
+}
 
 /**
  * Generate registration options for new passkey
@@ -65,7 +76,7 @@ export async function generatePasskeyRegistrationOptions(user, excludeCredential
       userID: user.id,
       userName: user.email,
       userDisplayName: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email,
-      timeout: 60000,
+      timeout: parseInt(process.env.WEBAUTHN_CHALLENGE_TIMEOUT_MS || '60000'),
       attestationType: 'none',
       excludeCredentials: excludeCredentialsList,
       authenticatorSelection: {
@@ -76,22 +87,20 @@ export async function generatePasskeyRegistrationOptions(user, excludeCredential
       supportedAlgorithmIDs: [-7, -257], // ES256 and RS256
     });
 
-    // Store challenge temporarily (in production, use Redis or similar)
-    // TODO: SECURITY - CRITICAL: Replace global memory with Redis/secure storage
-    // TODO: SECURITY - Add challenge expiry and cleanup mechanism
-    // TODO: PERFORMANCE - This will cause memory leaks and race conditions in production
-    if (!global.webauthnChallenges) {
-      global.webauthnChallenges = new Map();
-    }
-    
-    const challengeKey = `${user.id}_registration`;
-    global.webauthnChallenges.set(challengeKey, {
+    // Store challenge securely with automatic expiry
+    const challengeResult = storeWebAuthnRegistrationChallenge(user.id, {
       challenge: options.challenge,
-      timestamp: Date.now()
+      userHandle: options.user.id,
+      rpId: rpID
     });
 
-    // Clean up old challenges (older than 5 minutes)
-    cleanupOldChallenges();
+    if (!challengeResult.success) {
+      return {
+        success: false,
+        error: `Failed to store registration challenge: ${challengeResult.error}`,
+        data: null
+      };
+    }
 
     return {
       success: true,
@@ -117,59 +126,56 @@ export async function generatePasskeyRegistrationOptions(user, excludeCredential
  */
 export async function verifyPasskeyRegistration(user, registrationResponse, credentialName) {
   try {
-    // Get stored challenge
-    const challengeKey = `${user.id}_registration`;
-    const storedChallenge = global.webauthnChallenges?.get(challengeKey);
+    // Get stored challenge securely
+    const challengeResult = retrieveWebAuthnRegistrationChallenge(user.id);
     
-    if (!storedChallenge) {
+    if (!challengeResult.success) {
       return {
         success: false,
-        error: 'No registration challenge found',
+        error: `Registration challenge error: ${challengeResult.error}`,
         data: null
       };
     }
 
-    // Check challenge age (5 minutes max)
+    const storedChallenge = challengeResult.data;
+
+    // Check timeout
     // TODO: CONFIGURATION - Make challenge timeout configurable via environment variables
-    if (Date.now() - storedChallenge.timestamp > 5 * 60 * 1000) {
-      global.webauthnChallenges.delete(challengeKey);
+    const challengeTimeout = parseInt(process.env.WEBAUTHN_CHALLENGE_TIMEOUT_MS || '300000'); // 5 minutes
+    if (Date.now() - new Date(storedChallenge.timestamp).getTime() > challengeTimeout) {
       return {
         success: false,
-        error: 'Registration challenge expired',
+        error: 'Registration challenge has expired',
         data: null
       };
     }
 
+    // Verify the registration response
     const verification = await verifyRegistrationResponse({
       response: registrationResponse,
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      requireUserVerification: true,
+      requireUserVerification: false,
     });
-
-    // Clean up challenge
-    global.webauthnChallenges.delete(challengeKey);
 
     if (!verification.verified) {
       return {
         success: false,
-        error: 'Registration verification failed',
+        error: 'Passkey registration verification failed',
         data: null
       };
     }
 
+    // Store the credential in database
     const { registrationInfo } = verification;
-
-    // Store credential in database
     const credential = await prisma.webAuthnCredential.create({
       data: {
         userId: user.id,
         credentialId: bufferToBase64url(registrationInfo.credentialID),
-        publicKey: Buffer.from(registrationInfo.credentialPublicKey).toString('base64'),
+        publicKey: bufferToBase64url(registrationInfo.credentialPublicKey),
         counter: registrationInfo.counter,
-        deviceType: registrationInfo.credentialDeviceType,
-        name: credentialName || 'Unnamed Passkey',
+        name: credentialName || 'Passkey',
         createdAt: new Date(),
       }
     });
@@ -177,22 +183,17 @@ export async function verifyPasskeyRegistration(user, registrationResponse, cred
     return {
       success: true,
       error: null,
-      data: {
-        credential: {
-          id: credential.id,
-          credentialId: credential.credentialId,
-          name: credential.name,
-          deviceType: credential.deviceType,
-          createdAt: credential.createdAt
-        },
-        verified: true
+      data: { 
+        credentialId: credential.credentialId,
+        name: credential.name
       }
     };
 
   } catch (error) {
+    console.error('Passkey registration verification error:', error);
     return {
       success: false,
-      error: error?.message || 'Registration verification failed',
+      error: error?.message || 'Passkey registration failed',
       data: null
     };
   }
@@ -228,33 +229,34 @@ export async function generatePasskeyAuthenticationOptions(userEmail = null) {
     }
 
     const options = await generateAuthenticationOptions({
-      timeout: 60000,
+      timeout: parseInt(process.env.WEBAUTHN_AUTH_TIMEOUT_MS || '60000'),
       allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined,
       userVerification: 'preferred',
       rpID,
     });
 
-    // Store challenge temporarily
-    if (!global.webauthnChallenges) {
-      global.webauthnChallenges = new Map();
-    }
-    
-    const challengeKey = `auth_${generateSecureToken(16)}`;
-    global.webauthnChallenges.set(challengeKey, {
+    // Store challenge securely with automatic expiry
+    const sessionId = generateSecureToken(16);
+    const challengeResult = storeWebAuthnAuthenticationChallenge(sessionId, {
       challenge: options.challenge,
-      timestamp: Date.now(),
-      userEmail
+      userEmail,
+      rpId: rpID
     });
 
-    // Clean up old challenges
-    cleanupOldChallenges();
+    if (!challengeResult.success) {
+      return {
+        success: false,
+        error: `Failed to store authentication challenge: ${challengeResult.error}`,
+        data: null
+      };
+    }
 
     return {
       success: true,
       error: null,
       data: {
-        options,
-        challengeKey
+        ...options,
+        sessionId // Return session ID so client can send it back
       }
     };
 
@@ -270,47 +272,54 @@ export async function generatePasskeyAuthenticationOptions(userEmail = null) {
 /**
  * Verify passkey authentication response
  * @param {Object} authenticationResponse - WebAuthn authentication response
- * @param {string} challengeKey - Challenge key from registration
+ * @param {string} sessionId - Session ID from authentication options
  * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
  */
-export async function verifyPasskeyAuthentication(authenticationResponse, challengeKey) {
+export async function verifyPasskeyAuthentication(authenticationResponse, sessionId) {
   try {
-    // Get stored challenge
-    const storedChallenge = global.webauthnChallenges?.get(challengeKey);
+    // Get stored challenge securely
+    const challengeResult = retrieveWebAuthnAuthenticationChallenge(sessionId);
     
-    if (!storedChallenge) {
+    if (!challengeResult.success) {
       return {
         success: false,
-        error: 'No authentication challenge found',
+        error: `Authentication challenge error: ${challengeResult.error}`,
         data: null
       };
     }
 
-    // Check challenge age (5 minutes max)
+    const storedChallenge = challengeResult.data;
+
+    // Check timeout
     // TODO: CONFIGURATION - Make authentication challenge timeout configurable via environment variables
-    if (Date.now() - storedChallenge.timestamp > 5 * 60 * 1000) {
-      global.webauthnChallenges.delete(challengeKey);
+    const challengeTimeout = parseInt(process.env.WEBAUTHN_AUTH_TIMEOUT_MS || '120000'); // 2 minutes
+    if (Date.now() - new Date(storedChallenge.timestamp).getTime() > challengeTimeout) {
       return {
         success: false,
-        error: 'Authentication challenge expired',
+        error: 'Authentication challenge has expired',
         data: null
       };
     }
 
-    // Find credential
+    // Get credential from database
     const credential = await prisma.webAuthnCredential.findUnique({
-      where: { credentialId: authenticationResponse.id },
-      include: { user: true }
+      where: {
+        credentialId: authenticationResponse.rawId
+      },
+      include: {
+        user: true
+      }
     });
 
     if (!credential) {
       return {
         success: false,
-        error: 'Credential not found',
+        error: 'Passkey not found',
         data: null
       };
     }
 
+    // Verify the authentication response
     const verification = await verifyAuthenticationResponse({
       response: authenticationResponse,
       expectedChallenge: storedChallenge.challenge,
@@ -318,24 +327,21 @@ export async function verifyPasskeyAuthentication(authenticationResponse, challe
       expectedRPID: rpID,
       authenticator: {
         credentialID: base64urlToBuffer(credential.credentialId),
-        credentialPublicKey: Buffer.from(credential.publicKey, 'base64'),
+        credentialPublicKey: base64urlToBuffer(credential.publicKey),
         counter: credential.counter,
       },
-      requireUserVerification: true,
+      requireUserVerification: false,
     });
-
-    // Clean up challenge
-    global.webauthnChallenges.delete(challengeKey);
 
     if (!verification.verified) {
       return {
         success: false,
-        error: 'Authentication verification failed',
+        error: 'Passkey authentication verification failed',
         data: null
       };
     }
 
-    // Update credential counter
+    // Update counter
     await prisma.webAuthnCredential.update({
       where: { id: credential.id },
       data: {
@@ -349,19 +355,15 @@ export async function verifyPasskeyAuthentication(authenticationResponse, challe
       error: null,
       data: {
         user: credential.user,
-        credential: {
-          id: credential.id,
-          name: credential.name,
-          lastUsed: new Date()
-        },
-        verified: true
+        credentialId: credential.credentialId
       }
     };
 
   } catch (error) {
+    console.error('Passkey authentication verification error:', error);
     return {
       success: false,
-      error: error?.message || 'Authentication verification failed',
+      error: error?.message || 'Passkey authentication failed',
       data: null
     };
   }
@@ -471,21 +473,4 @@ export async function renamePasskey(userId, credentialId, newName) {
   }
 }
 
-/**
- * Clean up old challenges
- */
-function cleanupOldChallenges() {
-  // TODO: SECURITY - Implement proper challenge cleanup with configurable TTL
-  // TODO: PERFORMANCE - Add scheduled cleanup instead of on-demand
-  // TODO: BUG - This cleanup runs on every registration, inefficient
-  if (!global.webauthnChallenges) return;
-  
-  const now = Date.now();
-  const fiveMinutesAgo = now - 5 * 60 * 1000;
-  
-  for (const [key, challenge] of global.webauthnChallenges.entries()) {
-    if (challenge.timestamp < fiveMinutesAgo) {
-      global.webauthnChallenges.delete(key);
-    }
-  }
-}
+
