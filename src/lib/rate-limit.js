@@ -45,6 +45,21 @@ const RATE_LIMIT_CONFIG = {
   EMAIL_SEND_PER_EMAIL: {
     windowMs: 60 * 60 * 1000, // 1 hour
     maxAttempts: parseInt(process.env.RATE_LIMIT_EMAIL_RECIPIENT_MAX || '5'),
+  },
+  // Device trust verification per IP
+  DEVICE_CHECK_PER_IP: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_DEVICE_CHECK_MAX || '20'),
+  },
+  // Device registration per IP
+  DEVICE_REGISTER_PER_IP: {
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxAttempts: parseInt(process.env.RATE_LIMIT_DEVICE_REGISTER_MAX || '5'),
+  },
+  // Device revocation per IP
+  DEVICE_REVOKE_PER_IP: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_DEVICE_REVOKE_MAX || '10'),
   }
 };
 

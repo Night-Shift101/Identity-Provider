@@ -100,18 +100,22 @@ model LoginActivity {
 model TrustedDevice {
   id          String   @id @default(uuid())
   userId      String
-  deviceId    String   // Browser fingerprint or stored identifier
-  fingerprint String   // Device fingerprint hash
-  name        String?  // User-assigned name
-  userAgent   String
-  ipAddress   String
+  deviceHash  String   // Cryptographic hash of device fingerprint + userId
+  deviceName  String?  // User-assigned name for the device
+  firstSeen   DateTime @default(now())
   lastSeen    DateTime @default(now())
+  firstIP     String?  // IP address when first registered
+  lastIP      String?  // Most recent IP address
+  metadata    Json?    // Additional device metadata (browser info, etc.)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  @@unique([userId, deviceId])
+  @@unique([userId, deviceHash])
+  @@index([userId])
+  @@index([deviceHash])
   @@map("trusted_devices")
 }
 
