@@ -35,6 +35,16 @@ const RATE_LIMIT_CONFIG = {
   OAUTH_ATTEMPTS_PER_IP: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxAttempts: parseInt(process.env.RATE_LIMIT_OAUTH_IP_MAX || '20'),
+  },
+  // Email sending per IP
+  EMAIL_SEND_PER_IP: {
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxAttempts: parseInt(process.env.RATE_LIMIT_EMAIL_IP_MAX || '10'),
+  },
+  // Email sending per recipient
+  EMAIL_SEND_PER_EMAIL: {
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxAttempts: parseInt(process.env.RATE_LIMIT_EMAIL_RECIPIENT_MAX || '5'),
   }
 };
 

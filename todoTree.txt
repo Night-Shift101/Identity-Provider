@@ -5,23 +5,19 @@
    │  │  │  ├─ auth
    │  │  │  │  ├─ login
    │  │  │  │  │  └─ route.js
-   │  │  │  │  │     ├─ line 166: TODO : CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
-   │  │  │  │  │     ├─ line 299: TODO : CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
-   │  │  │  │  │     ├─ line 306: TODO : SECURITY - Don't log sensitive information in production
-   │  │  │  │  │     ├─ line 307: TODO : LOGGING - Use proper logging framework instead of console.error
-   │  │  │  │  │     └─ line 308: TODO : MONITORING - Add error tracking and alerting
+   │  │  │  │  │     ├─ line 262: TODO : CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
+   │  │  │  │  │     ├─ line 399: TODO : CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
+   │  │  │  │  │     ├─ line 406: TODO : SECURITY - Don't log sensitive information in production
+   │  │  │  │  │     ├─ line 407: TODO : LOGGING - Use proper logging framework instead of console.error
+   │  │  │  │  │     └─ line 408: TODO : MONITORING - Add error tracking and alerting
    │  │  │  │  ├─ oauth
    │  │  │  │  │  └─ route.js
-   │  │  │  │  │     ├─ line 13: TODO : SECURITY - Move OAuth credentials to secure configuration service
-   │  │  │  │  │     ├─ line 15: TODO : PERFORMANCE - Replace in-memory PKCE store with Redis for production scalability
-   │  │  │  │  │     └─ line 184: TODO : ERROR_HANDLING - Add proper OAuth error handling and user feedback
-   │  │  │  │  ├─ register
-   │  │  │  │  │  └─ route.js
-   │  │  │  │  │     ├─ line 7: TODO : FUNCTIONALITY - Implement API versioning for backward compatibility
-   │  │  │  │  │     └─ line 17: TODO : SECURITY - Add CAPTCHA or similar anti-bot protection
-   │  │  │  │  └─ verify-email
+   │  │  │  │  │     ├─ line 31: TODO : SECURITY - Move OAuth credentials to secure configuration service
+   │  │  │  │  │     ├─ line 32: TODO : SECURITY - Add OAuth state parameter validation to prevent CSRF
+   │  │  │  │  │     └─ line 33: TODO : SECURITY - Implement OAuth PKCE for enhanced security
+   │  │  │  │  └─ register
    │  │  │  │     └─ route.js
-   │  │  │  │        └─ line 64: TODO : SECURITY - Add geolocation tracking for verification attempts
+   │  │  │  │        └─ line 7: TODO : FUNCTIONALITY - Implement API versioning for backward compatibility
    │  │  │  └─ test
    │  │  │     └─ route.js
    │  │  │        ├─ line 40: TODO : LOGGING - Use proper logging framework instead of console.log
@@ -29,8 +25,6 @@
    │  │  │        ├─ line 51: TODO : LOGGING - Use proper logging framework instead of console.error
    │  │  │        └─ line 52: TODO : SECURITY - Don't expose error details in production
    │  │  ├─ auth
-   │  │  │  ├─ login
-   │  │  │  │  └─ page.js
    │  │  │  ├─ mfa
    │  │  │  │  └─ page.js
    │  │  │  │     ├─ line 21: TODO : SECURITY - Replace sessionStorage with secure server-side session management
@@ -72,35 +66,23 @@
    │  │  │     ├─ line 42: TODO : FUNCTIONALITY - Implement session termination
    │  │  │     └─ line 43: TODO : LOGGING - Use proper logging framework instead of console.log
    │  │  └─ layout.js
-   │  │     └─ line 43: TODO : FUNCTIONALITY - Implement React Error Boundary for better error handling
+   │  │     └─ line 42: TODO : FUNCTIONALITY - Implement React Error Boundary for better error handling
    │  ├─ components
    │  │  └─ PasskeySetupPrompt.js
    │  │     ├─ line 30: TODO : LOGGING - Use proper logging framework instead of console.error
    │  │     ├─ line 31: TODO : UX - Add user-friendly error messages for different error types
    │  │     └─ line 32: TODO : ERROR_HANDLING - Handle specific WebAuthn error codes
    │  ├─ lib
-   │  │  ├─ rate-limit.js
-   │  │  │  └─ line 6: TODO : PERFORMANCE - Replace in-memory rate limit store with Redis for production scalability
-   │  │  └─ oauth-pkce.js
    │  │  ├─ auth.js
-   │  │  │  ├─ line 68: TODO : SECURITY - Consider rotating JWT secrets and key versioning
-   │  │  │  ├─ line 102: TODO : SECURITY - Implement token blacklisting for logout/revocation
-   │  │  │  ├─ line 181: TODO : SECURITY - Add check against common password lists (rockyou.txt, etc.)
-   │  │  │  ├─ line 182: TODO : SECURITY - Add password history check to prevent reuse
-   │  │  │  ├─ line 183: TODO : SECURITY - Calculate password entropy score
-   │  │  │  └─ line 184: TODO : SECURITY - Add check for keyboard patterns (qwerty, 123456, etc.)
+   │  │  │  ├─ line 177: TODO : SECURITY - Add check against common password lists (rockyou.txt, etc.)
+   │  │  │  ├─ line 178: TODO : SECURITY - Add password history check to prevent reuse
+   │  │  │  ├─ line 179: TODO : SECURITY - Calculate password entropy score
+   │  │  │  └─ line 180: TODO : SECURITY - Add check for keyboard patterns (qwerty, 123456, etc.)
    │  │  ├─ database.js
    │  │  │  ├─ line 7: TODO : INFRASTRUCTURE - Implement database backup and disaster recovery procedures
    │  │  │  ├─ line 16: TODO : SECURITY - Add connection pooling limits and timeout configuration
    │  │  │  ├─ line 17: TODO : PERFORMANCE - Implement connection retry logic and circuit breaker
    │  │  │  └─ line 18: TODO : MONITORING - Add database connection monitoring and alerts
-   │  │  ├─ email.js
-   │  │  │  ├─ line 14: TODO : SECURITY - Add email rate limiting and anti-spam measures
-   │  │  │  ├─ line 15: TODO : SECURITY - Implement email template sanitization
-   │  │  │  ├─ line 16: TODO : RELIABILITY - Add email delivery retry logic and queue system
-   │  │  │  ├─ line 17: TODO : MONITORING - Add email delivery monitoring and alerts
-   │  │  │  ├─ line 39: TODO : SECURITY-Critical - Add validation for required environment variables
-   │  │  │  └─ line 41: TODO : SECURITY-Critical - Don't hardcode localhost fallback in production
    │  │  ├─ passkey-utils.js
    │  │  │  ├─ line 43: TODO : SECURITY - CRITICAL: localStorage can be manipulated by client-side scripts
    │  │  │  ├─ line 44: TODO : SECURITY - Implement server-side device fingerprinting instead
