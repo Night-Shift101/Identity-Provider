@@ -4,7 +4,6 @@
  * @author IdP System
  */
 
-// TODO: SECURITY-Critical - Implement Content Security Policy headers to prevent XSS attacks
 import { Inter } from 'next/font/google';
 import './globals.css';
 

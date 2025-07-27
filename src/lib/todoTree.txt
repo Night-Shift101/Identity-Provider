@@ -87,7 +87,6 @@
    │  │  │     ├─ line 42: TODO : FUNCTIONALITY - Implement session termination
    │  │  │     └─ line 43: TODO : LOGGING - Use proper logging framework instead of console.log
    │  │  └─ layout.js
-   │  │     ├─ line 7: TODO : SECURITY-Critical - Implement Content Security Policy headers to prevent XSS attacks
    │  │     └─ line 43: TODO : FUNCTIONALITY - Implement React Error Boundary for better error handling
    │  ├─ components
    │  │  └─ PasskeySetupPrompt.js
