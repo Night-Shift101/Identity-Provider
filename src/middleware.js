@@ -45,14 +45,8 @@ async function handleAuthentication(request) {
       '/dashboard',
       '/account',
       '/security', 
-      '/devices',
-      '/api/auth/mfa',
-      '/api/auth/logout',
-      '/api/auth/change-password',
-      '/api/auth/delete-account',
-      '/api/account/',
-      '/api/devices/',
-      '/api/security/'
+      '/devices'
+      // Removed API routes - they handle their own authentication
     ];
 
     const authRoutes = [
@@ -106,17 +100,6 @@ async function handleAuthentication(request) {
           dashboardUrl.searchParams.set('error', 'insufficient_permissions');
           return NextResponse.redirect(dashboardUrl);
         }
-      }
-
-      // Add secure headers for API routes
-      if (pathname.startsWith('/api/')) {
-        const secureHeaders = getSecureHeaders(sessionValidation.data);
-        
-        return NextResponse.next({
-          request: {
-            headers: secureHeaders,
-          }
-        });
       }
 
       // Allow access to protected pages

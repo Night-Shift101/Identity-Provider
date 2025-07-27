@@ -8,14 +8,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import DeviceTrustPrompt from '@/components/DeviceTrustPrompt';
 
 export default function MfaPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [backupCode, setBackupCode] = useState('');
+  const [isBackupMode, setIsBackupMode] = useState(false);
   const [sessionData, setSessionData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showDeviceTrust, setShowDeviceTrust] = useState(false);
+  const [mfaCompleted, setMfaCompleted] = useState(false);
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -83,10 +88,18 @@ export default function MfaPage() {
     const handleSubmit = async (e, codeValue = null) => {
     if (e) e.preventDefault();
     
-    const mfaCode = codeValue || code.join('');
-    if (mfaCode.length !== 6) {
-      setError('Please enter a 6-digit code');
-      return;
+    const mfaCode = codeValue || (isBackupMode ? backupCode : code.join(''));
+    
+    if (isBackupMode) {
+      if (!mfaCode || mfaCode.length < 8) {
+        setError('Please enter a valid backup code');
+        return;
+      }
+    } else {
+      if (mfaCode.length !== 6) {
+        setError('Please enter a 6-digit code');
+        return;
+      }
     }
 
     if (!sessionData) {
@@ -114,12 +127,22 @@ export default function MfaPage() {
       const result = await response.json();
 
       if (result.success) {
-        // MFA verification successful - redirect to dashboard
-        router.push('/dashboard');
+        // MFA verification successful - show device trust prompt
+        setMfaCompleted(true);
+        setShowDeviceTrust(true);
       } else {
-        setError(result.error || 'Invalid verification code');
-        setCode(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
+        // Extract error message whether it's a string or object
+        const errorMessage = typeof result.error === 'string' 
+          ? result.error 
+          : result.error?.message || 'Invalid verification code';
+        setError(errorMessage);
+        
+        if (isBackupMode) {
+          setBackupCode('');
+        } else {
+          setCode(['', '', '', '', '', '']);
+          inputRefs.current[0]?.focus();
+        }
       }
     } catch (error) {
       console.error('MFA verification error:', error);
@@ -129,26 +152,44 @@ export default function MfaPage() {
     }
   };
 
-  const handleResendBackupCodes = async () => {
-    // TODO: SECURITY - Add rate limiting for backup code regeneration
+  /**
+   * Handle device trust decision after successful MFA
+   * @param {Object} decision - User's decision about device trust
+   */
+  const handleDeviceTrustDecision = async (decision) => {
     try {
-      const response = await fetch('/api/auth/mfa/backup-codes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ sessionId: sessionData?.sessionId }),
-      });
+      if (decision.trustDevice && decision.fingerprint) {
+        // Send device trust request to server
+        const response = await fetch('/api/devices/check-trust', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            deviceFingerprint: decision.fingerprint,
+            deviceName: decision.deviceName,
+            metadata: {
+              trusted: true,
+              trustedAt: new Date().toISOString()
+            }
+          })
+        });
 
-      if (response.ok) {
-        // TODO: UX - Replace alert() with proper toast notification system
-        // TODO: SECURITY - Add rate limiting for backup code regeneration
-        alert('New backup codes have been sent to your email');
+        const result = await response.json();
+        
+        if (!result.success) {
+          console.error('Failed to register trusted device:', result.error);
+          // Continue anyway - device trust is optional
+        }
       }
-    } catch (err) {
-      // TODO: LOGGING - Use proper logging framework instead of console.error
-      console.error('Failed to resend backup codes:', err);
+
+      // Redirect to dashboard regardless of device trust decision
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Error handling device trust decision:', error);
+      // Continue anyway - device trust is optional
+      router.push('/dashboard');
     }
   };
 
@@ -183,7 +224,10 @@ export default function MfaPage() {
           Two-Factor Authentication
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Enter the 6-digit code from your authenticator app
+          {isBackupMode 
+            ? 'Enter your backup code'
+            : 'Enter the 6-digit code from your authenticator app'
+          }
         </p>
       </div>
 
@@ -191,42 +235,62 @@ export default function MfaPage() {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           {error && (
             <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error}
+              {typeof error === 'string' ? error : error.message || 'An error occurred'}
             </div>
           )}
 
           <form onSubmit={handleSubmit}>
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
-                Authentication Code
+                {isBackupMode ? 'Backup Code' : 'Authentication Code'}
               </label>
-              <div className="flex justify-center space-x-3">
-                {code.map((digit, index) => (
+              
+              {isBackupMode ? (
+                // Backup code input
+                <div className="flex justify-center">
                   <input
-                    key={index}
-                    ref={el => inputRefs.current[index] = el}
                     type="text"
-                    inputMode="numeric"
-                    pattern="\d*"
-                    maxLength="1"
-                    value={digit}
-                    onChange={(e) => handleInputChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    onPaste={handlePaste}
-                    // TODO: ACCESSIBILITY - Add aria-label for screen readers describing which digit position this is
-                    className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter backup code"
+                    value={backupCode}
+                    onChange={(e) => setBackupCode(e.target.value)}
+                    className="w-64 h-12 text-center text-lg font-mono border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     disabled={isLoading}
+                    autoFocus
                   />
-                ))}
-              </div>
+                </div>
+              ) : (
+                // 6-digit TOTP input
+                <div className="flex justify-center space-x-3">
+                  {code.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={el => inputRefs.current[index] = el}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength="1"
+                      value={digit}
+                      onChange={(e) => handleInputChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                      onPaste={handlePaste}
+                      className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isLoading}
+                    />
+                  ))}
+                </div>
+              )}
+              
               <p className="mt-2 text-xs text-gray-500 text-center">
-                Enter the code from Google Authenticator, Authy, or your preferred TOTP app
+                {isBackupMode 
+                  ? 'Enter one of your saved backup codes'
+                  : 'Enter the code from Google Authenticator, Authy, or your preferred TOTP app'
+                }
               </p>
             </div>
 
             <button
               type="submit"
-              disabled={isLoading || code.some(digit => digit === '')}
+              disabled={isLoading || (isBackupMode ? !backupCode : code.some(digit => digit === ''))}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -235,9 +299,32 @@ export default function MfaPage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               ) : null}
-              Verify Code
+              Verify {isBackupMode ? 'Backup Code' : 'Code'}
             </button>
           </form>
+
+          {/* Toggle between TOTP and backup code modes */}
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsBackupMode(!isBackupMode);
+                setError('');
+                // Clear form data when switching modes
+                if (isBackupMode) {
+                  setBackupCode('');
+                } else {
+                  setCode(['', '', '', '', '', '']);
+                }
+              }}
+              className="text-sm text-blue-600 hover:text-blue-500 underline"
+            >
+              {isBackupMode 
+                ? 'Use authenticator app instead' 
+                : 'Use backup code instead'
+              }
+            </button>
+          </div>
 
           <div className="mt-6">
             <div className="relative">
@@ -249,15 +336,7 @@ export default function MfaPage() {
               </div>
             </div>
 
-            <div className="mt-6 space-y-3">
-              <button
-                type="button"
-                onClick={handleResendBackupCodes}
-                className="w-full text-center text-sm text-blue-600 hover:text-blue-500"
-              >
-                Use a backup code instead
-              </button>
-              
+            <div className="mt-6">
               <button
                 type="button"
                 onClick={() => {
@@ -292,6 +371,12 @@ export default function MfaPage() {
           </div>
         </div>
       </div>
+
+      {/* Device Trust Prompt */}
+      <DeviceTrustPrompt 
+        show={showDeviceTrust && mfaCompleted}
+        onDecision={handleDeviceTrustDecision}
+      />
     </div>
   );
 }

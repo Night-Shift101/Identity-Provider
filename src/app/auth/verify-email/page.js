@@ -41,7 +41,10 @@ export default function VerifyEmailPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Verification failed');
+        const errorMessage = typeof data.error === 'string' 
+          ? data.error 
+          : data.error?.message || 'Verification failed';
+        setError(errorMessage);
         return;
       }
 
@@ -165,7 +168,7 @@ export default function VerifyEmailPage() {
                 Verification Failed
               </h2>
               <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                {error}
+                {typeof error === 'string' ? error : error.message || 'An error occurred'}
               </div>
               
               <div className="mt-6 space-y-4">

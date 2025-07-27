@@ -4,8 +4,8 @@
  * @author IdP System
  */
 
-import { db } from './database';
-import { generateSecureToken } from './security';
+import { prisma } from './database';
+import { generateSecureToken } from './auth';
 
 /**
  * Create a secure MFA session
@@ -29,7 +29,7 @@ export async function createMfaSession(userId, userAgent, ipAddress) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store MFA session in database (secure server-side storage)
-    const mfaSession = await db.mfaSession.create({
+    const mfaSession = await prisma.mfaSession.create({
       data: {
         token: mfaToken,
         userId,
@@ -77,8 +77,8 @@ export async function validateMfaSession(mfaToken) {
       };
     }
 
-    // Find MFA session in database
-    const mfaSession = await db.mfaSession.findFirst({
+        // Find MFA session to increment attempts
+    const mfaSession = await prisma.mfaSession.findFirst({
       where: {
         token: mfaToken,
         isUsed: false
@@ -90,7 +90,8 @@ export async function validateMfaSession(mfaToken) {
             email: true,
             username: true,
             mfaEnabled: true,
-            totpSecret: true
+            mfaSecret: true,
+            mfaBackupCodes: true
           }
         }
       }
@@ -106,8 +107,8 @@ export async function validateMfaSession(mfaToken) {
 
     // Check if session has expired
     if (new Date() > mfaSession.expiresAt) {
-      // Clean up expired session
-      await db.mfaSession.delete({
+            // Delete expired session
+      await prisma.mfaSession.delete({
         where: { id: mfaSession.id }
       });
 
@@ -157,7 +158,7 @@ export async function validateMfaSession(mfaToken) {
  */
 export async function incrementMfaAttempts(mfaToken) {
   try {
-    const mfaSession = await db.mfaSession.findFirst({
+    const mfaSession = await prisma.mfaSession.findFirst({
       where: {
         token: mfaToken,
         isUsed: false
@@ -173,7 +174,7 @@ export async function incrementMfaAttempts(mfaToken) {
     }
 
     // Increment attempts
-    const updatedSession = await db.mfaSession.update({
+    const updatedSession = await prisma.mfaSession.update({
       where: { id: mfaSession.id },
       data: {
         attempts: mfaSession.attempts + 1,
@@ -208,7 +209,7 @@ export async function incrementMfaAttempts(mfaToken) {
  */
 export async function completeMfaSession(mfaToken) {
   try {
-    const mfaSession = await db.mfaSession.findFirst({
+    const mfaSession = await prisma.mfaSession.findFirst({
       where: {
         token: mfaToken,
         isUsed: false
@@ -224,7 +225,7 @@ export async function completeMfaSession(mfaToken) {
     }
 
     // Mark session as used
-    await db.mfaSession.update({
+    await prisma.mfaSession.update({
       where: { id: mfaSession.id },
       data: {
         isUsed: true,
@@ -257,7 +258,7 @@ export async function completeMfaSession(mfaToken) {
  */
 export async function cleanupExpiredMfaSessions() {
   try {
-    const result = await db.mfaSession.deleteMany({
+    const result = await prisma.mfaSession.deleteMany({
       where: {
         OR: [
           { expiresAt: { lt: new Date() } },
@@ -295,7 +296,7 @@ export async function cleanupExpiredMfaSessions() {
  */
 export async function revokeMfaSessionsForUser(userId) {
   try {
-    const result = await db.mfaSession.deleteMany({
+    const result = await prisma.mfaSession.deleteMany({
       where: {
         userId,
         isUsed: false

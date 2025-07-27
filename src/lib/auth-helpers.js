@@ -5,7 +5,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/lib/auth';
 import { sessionDb } from '@/lib/database';
 
 /**

@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyPassword, generateAccessToken, generateSecureToken } from '@/lib/auth';
+import { verifyPassword, generateSecureToken } from '@/lib/auth';
 import { userDb, sessionDb, activityDb } from '@/lib/database';
 import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, logSecurityEvent, addTrustedDevice } from '@/lib/security';
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
@@ -25,7 +25,8 @@ export async function POST(request) {
       password, 
       totpToken, 
       backupCode,
-      rememberDevice = false,
+      rememberMe = false,
+      rememberDevice = rememberMe, // Use rememberMe if rememberDevice not provided
       deviceFingerprint 
     } = await request.json();
 
@@ -273,9 +274,9 @@ export async function POST(request) {
         response.cookies.set('mfa-session', mfaSessionResult.data.mfaToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
+          sameSite: 'lax',
           maxAge: 10 * 60, // 10 minutes
-          path: '/auth/mfa'
+          path: '/'
         });
 
         return response;
@@ -299,20 +300,6 @@ export async function POST(request) {
     if (!sessionResult.success) {
       return NextResponse.json(
         { success: false, error: 'Session creation failed' },
-        { status: 500 }
-      );
-    }
-
-    // Generate JWT access token
-    const accessTokenResult = await generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      sessionId: sessionResult.data.id
-    });
-
-    if (!accessTokenResult.success) {
-      return NextResponse.json(
-        { success: false, error: 'Token generation failed' },
         { status: 500 }
       );
     }
@@ -410,9 +397,7 @@ export async function POST(request) {
           lastName: user.lastName,
           isVerified: user.isVerified,
           mfaEnabled: user.mfaEnabled
-        },
-        accessToken: accessTokenResult.data,
-        expiresAt: expiresAt.toISOString()
+        }
       }
     }, { status: 200 });
 
@@ -420,7 +405,7 @@ export async function POST(request) {
     response.cookies.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict', // Enhanced CSRF protection
+      sameSite: 'lax', // More compatible with fetch API while still providing CSRF protection
       // TODO: CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
       maxAge: 30 * 24 * 60 * 60 // 30 days
     });

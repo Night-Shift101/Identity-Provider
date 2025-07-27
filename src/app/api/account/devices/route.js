@@ -33,18 +33,22 @@ export async function GET(request) {
       },
       select: {
         id: true,
-        deviceId: true,
-        name: true,
-        userAgent: true,
-        ipAddress: true,
+        deviceHash: true,
+        deviceName: true,
+        firstSeen: true,
         lastSeen: true,
+        firstIP: true,
+        lastIP: true,
+        metadata: true,
         createdAt: true
       }
     });
 
-    // Parse user agents for better display
+    // Parse device metadata for better display
     const devicesWithInfo = devices.map(device => {
-      const userAgent = device.userAgent || '';
+      // Extract user agent from metadata if available
+      const metadata = device.metadata || {};
+      const userAgent = metadata.userAgent || '';
       let deviceInfo = 'Unknown Device';
       let browserInfo = 'Unknown Browser';
       let osInfo = 'Unknown OS';
@@ -67,13 +71,14 @@ export async function GET(request) {
 
       return {
         id: device.id,
-        deviceId: device.deviceId,
-        name: device.name || `${deviceInfo} - ${browserInfo}`,
+        deviceHash: device.deviceHash,
+        name: device.deviceName || `${deviceInfo} - ${browserInfo}`,
         deviceInfo,
         browserInfo,
         osInfo,
-        ipAddress: device.ipAddress,
+        ipAddress: device.lastIP || device.firstIP,
         lastSeen: device.lastSeen,
+        firstSeen: device.firstSeen,
         createdAt: device.createdAt,
         isCurrentDevice: false // We'll set this based on current session
       };

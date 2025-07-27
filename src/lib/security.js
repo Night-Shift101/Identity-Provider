@@ -335,7 +335,7 @@ export async function checkTrustedDevice(userId, deviceFingerprint) {
     const trustedDevice = await prisma.trustedDevice.findFirst({
       where: {
         userId,
-        fingerprint: deviceFingerprint,
+        deviceHash: deviceFingerprint,
         isActive: true
       }
     });
@@ -364,11 +364,14 @@ export async function addTrustedDevice(deviceData) {
     const trustedDevice = await prisma.trustedDevice.create({
       data: {
         userId: deviceData.userId,
-        deviceId: deviceData.deviceId,
-        fingerprint: deviceData.fingerprint,
-        name: deviceData.name || null,
-        userAgent: deviceData.userAgent,
-        ipAddress: deviceData.ipAddress,
+        deviceHash: deviceData.fingerprint,
+        deviceName: deviceData.name || null,
+        firstIP: deviceData.ipAddress,
+        lastIP: deviceData.ipAddress,
+        metadata: {
+          userAgent: deviceData.userAgent,
+          ...deviceData.metadata
+        },
         lastSeen: new Date(),
         isActive: true
       }
@@ -399,7 +402,7 @@ export async function removeTrustedDevice(userId, deviceId) {
     await prisma.trustedDevice.updateMany({
       where: {
         userId,
-        deviceId
+        id: deviceId  // Use 'id' field instead of 'deviceId'
       },
       data: {
         isActive: false

@@ -12,7 +12,8 @@ import { logSecurityEvent } from '@/lib/security';
 // Initialize MFA setup
 export async function POST(request) {
   try {
-    const { action } = await request.json();
+    const body = await request.json();
+    const { action, secret, token } = body;
     
     // Get session token from cookie or Authorization header
     const sessionToken = request.cookies.get('session')?.value ||
@@ -47,7 +48,6 @@ export async function POST(request) {
         return await handleInitializeMfa(user, clientIp, userAgent);
       
       case 'verify':
-        const { secret, token } = await request.json();
         return await handleVerifyMfa(user, secret, token, clientIp, userAgent);
       
       case 'disable':

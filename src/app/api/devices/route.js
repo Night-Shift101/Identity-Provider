@@ -40,12 +40,13 @@ export async function GET(request) {
       },
       select: {
         id: true,
-        deviceId: true,
-        name: true,
-        userAgent: true,
-        ipAddress: true,
+        deviceHash: true,
+        deviceName: true,
+        firstIP: true,
+        lastIP: true,
         lastSeen: true,
-        createdAt: true
+        createdAt: true,
+        metadata: true
       },
       orderBy: { lastSeen: 'desc' }
     });
@@ -62,7 +63,8 @@ export async function GET(request) {
         id: true,
         ipAddress: true,
         userAgent: true,
-        expires: true
+        expires: true,
+        sessionToken: false // Don't expose the actual token
       },
       orderBy: { expires: 'desc' }
     });
@@ -128,13 +130,26 @@ export async function DELETE(request) {
           );
         }
 
-        const removeResult = await removeTrustedDevice(user.id, deviceId);
-        if (!removeResult.success) {
+        // Remove trusted device by updating isActive to false
+        const device = await prisma.trustedDevice.findFirst({
+          where: {
+            id: deviceId,
+            userId: user.id,
+            isActive: true
+          }
+        });
+
+        if (!device) {
           return NextResponse.json(
-            { success: false, error: removeResult.error },
-            { status: 500 }
+            { success: false, error: 'Device not found' },
+            { status: 404 }
           );
         }
+
+        await prisma.trustedDevice.update({
+          where: { id: deviceId },
+          data: { isActive: false }
+        });
 
         await logSecurityEvent({
           userId: user.id,

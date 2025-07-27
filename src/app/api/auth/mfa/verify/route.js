@@ -6,11 +6,11 @@
 
 import { NextResponse } from 'next/server';
 import { validateMfaSession, incrementMfaAttempts, completeMfaSession } from '@/lib/mfa-sessions';
-import { verifyTotpToken } from '@/lib/mfa';
-import { createSession } from '@/lib/auth-helpers';
-import { getClientIpAddress } from '@/lib/security';
-import { checkRateLimit, recordRateLimitAttempt } from '@/lib/rate-limit';
+import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
+import { checkRateLimit, recordRateLimitAttempt, getClientIP } from '@/lib/rate-limit';
 import { logSecurityEvent } from '@/lib/security';
+import { sessionDb, userDb } from '@/lib/database';
+import { generateSecureToken } from '@/lib/auth';
 
 /**
  * Verify MFA code and complete authentication
@@ -18,7 +18,7 @@ import { logSecurityEvent } from '@/lib/security';
  */
 export async function POST(request) {
   try {
-    const ipAddress = getClientIpAddress(request);
+    const ipAddress = getClientIP(request);
     
     // Rate limiting for MFA verification attempts
     const rateLimitResult = checkRateLimit('MFA_VERIFY_PER_IP', ipAddress);
@@ -69,33 +69,80 @@ export async function POST(request) {
 
     // Clean and validate code format
     const cleanCode = code.replace(/\s/g, '');
-    if (!/^\d{6}$/.test(cleanCode)) {
+    
+    // Determine if this is a TOTP code (6 digits) or backup code (8+ characters)
+    const isTotpCode = /^\d{6}$/.test(cleanCode);
+    const isBackupCode = cleanCode.length >= 8; // Backup codes are typically 8-10 characters
+    
+    if (!isTotpCode && !isBackupCode) {
       return NextResponse.json({
         success: false,
-        error: 'Invalid code format. Please enter a 6-digit number.',
+        error: 'Invalid code format. Please enter a 6-digit TOTP code or a backup code.',
         data: null
       }, { status: 400 });
     }
 
-    // Check if user has MFA enabled and TOTP secret
-    if (!user.mfaEnabled || !user.totpSecret) {
+    // Check if user has MFA enabled
+    if (!user.mfaEnabled) {
       await logSecurityEvent({
         userId: user.id,
         event: 'MFA_VERIFICATION_FAILED',
-        details: { reason: 'MFA not properly configured' },
+        details: { reason: 'MFA not enabled' },
         ipAddress,
         userAgent: request.headers.get('user-agent')
       });
 
       return NextResponse.json({
         success: false,
-        error: 'MFA is not properly configured for this account',
+        error: 'MFA is not enabled for this account',
         data: null
       }, { status: 400 });
     }
 
-    // Verify TOTP code
-    const verificationResult = await verifyTotpToken(cleanCode, user.totpSecret);
+    let verificationResult;
+    let verificationMethod;
+
+    if (isTotpCode) {
+      // Verify TOTP code
+      if (!user.mfaSecret) {
+        await logSecurityEvent({
+          userId: user.id,
+          event: 'MFA_VERIFICATION_FAILED',
+          details: { reason: 'TOTP secret not configured' },
+          ipAddress,
+          userAgent: request.headers.get('user-agent')
+        });
+
+        return NextResponse.json({
+          success: false,
+          error: 'TOTP is not properly configured for this account',
+          data: null
+        }, { status: 400 });
+      }
+
+      verificationResult = await verifyTotpToken(cleanCode, user.mfaSecret);
+      verificationMethod = 'totp';
+    } else {
+      // Verify backup code
+      if (!user.mfaBackupCodes || user.mfaBackupCodes.length === 0) {
+        await logSecurityEvent({
+          userId: user.id,
+          event: 'MFA_VERIFICATION_FAILED',
+          details: { reason: 'No backup codes available' },
+          ipAddress,
+          userAgent: request.headers.get('user-agent')
+        });
+
+        return NextResponse.json({
+          success: false,
+          error: 'No backup codes available for this account',
+          data: null
+        }, { status: 400 });
+      }
+
+      verificationResult = verifyBackupCode(cleanCode, user.mfaBackupCodes);
+      verificationMethod = 'backup_code';
+    }
 
     // Increment attempt counter regardless of result
     await incrementMfaAttempts(mfaToken);
@@ -106,7 +153,8 @@ export async function POST(request) {
         userId: user.id,
         event: 'MFA_VERIFICATION_FAILED',
         details: { 
-          reason: 'Invalid TOTP code',
+          reason: `Invalid ${verificationMethod} code`,
+          method: verificationMethod,
           attempts: sessionValidation.data.attempts + 1
         },
         ipAddress,
@@ -122,18 +170,36 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
+    // If backup code was used, update the user's backup codes (remove the used one)
+    if (verificationMethod === 'backup_code') {
+      const updateResult = await userDb.update(user.id, {
+        mfaBackupCodes: verificationResult.data.remainingCodes
+      });
+
+      if (!updateResult.success) {
+        console.error('Failed to update backup codes:', updateResult.error);
+        // Continue with authentication despite backup code update failure
+      }
+    }
+
     // MFA verification successful - complete the MFA session
     const completionResult = await completeMfaSession(mfaToken);
     if (!completionResult.success) {
       console.error('Failed to complete MFA session:', completionResult.error);
     }
 
+    // Generate session token
+    const sessionToken = generateSecureToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
     // Create full authenticated session
-    const sessionResult = await createSession(
-      user.id,
-      request.headers.get('user-agent'),
-      ipAddress
-    );
+    const sessionResult = await sessionDb.create({
+      sessionToken,
+      userId: user.id,
+      expires: expiresAt,
+      ipAddress,
+      userAgent: request.headers.get('user-agent')
+    });
 
     if (!sessionResult.success) {
       await logSecurityEvent({
@@ -156,8 +222,11 @@ export async function POST(request) {
       userId: user.id,
       event: 'MFA_VERIFICATION_SUCCESS',
       details: { 
-        method: 'totp',
-        sessionId: sessionResult.data.sessionId
+        method: verificationMethod,
+        sessionId: sessionResult.data.id,
+        ...(verificationMethod === 'backup_code' && verificationResult.data.remainingCodes 
+          ? { remainingBackupCodes: verificationResult.data.remainingCodes.length }
+          : {})
       },
       ipAddress,
       userAgent: request.headers.get('user-agent')
@@ -178,12 +247,11 @@ export async function POST(request) {
     });
 
     // Set secure session cookie
-    response.cookies.set('session', sessionResult.data.token, {
+    response.cookies.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/'
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 // 30 days
     });
 
     // Clear MFA session cookie

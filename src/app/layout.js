@@ -38,9 +38,8 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-            <body className={inter.className}>
+      <body className={inter.className}>
         {/* TODO: FUNCTIONALITY - Implement React Error Boundary for better error handling */}
-        {children}
         <div id="root" className="min-h-screen">
           {children}
         </div>

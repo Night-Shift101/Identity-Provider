@@ -11,8 +11,7 @@ import {
   incrementMfaAttempts, 
   completeMfaSession 
 } from '@/lib/mfa-sessions';
-import { getClientIpAddress } from '@/lib/security';
-import { checkRateLimit, recordRateLimitAttempt } from '@/lib/rate-limit';
+import { checkRateLimit, recordRateLimitAttempt, getClientIP } from '@/lib/rate-limit';
 
 /**
  * Create MFA session
@@ -20,7 +19,7 @@ import { checkRateLimit, recordRateLimitAttempt } from '@/lib/rate-limit';
  */
 export async function POST(request) {
   try {
-    const ipAddress = getClientIpAddress(request);
+    const ipAddress = getClientIP(request);
     
     // Rate limiting for MFA session creation
     const rateLimitResult = checkRateLimit('MFA_SESSION_CREATE_PER_IP', ipAddress);
@@ -75,16 +74,16 @@ export async function POST(request) {
     response.cookies.set('mfa-session', sessionResult.data.mfaToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 10 * 60, // 10 minutes
-      path: '/auth/mfa'
+      path: '/'
     });
 
     return response;
 
   } catch (error) {
     console.error('MFA session creation error:', error);
-    recordRateLimitAttempt('MFA_SESSION_CREATE_PER_IP', getClientIpAddress(request));
+    recordRateLimitAttempt('MFA_SESSION_CREATE_PER_IP', getClientIP(request));
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
@@ -99,7 +98,7 @@ export async function POST(request) {
  */
 export async function GET(request) {
   try {
-    const ipAddress = getClientIpAddress(request);
+    const ipAddress = getClientIP(request);
     
     // Rate limiting for MFA session validation
     const rateLimitResult = checkRateLimit('MFA_SESSION_VALIDATE_PER_IP', ipAddress);
@@ -159,7 +158,7 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('MFA session validation error:', error);
-    recordRateLimitAttempt('MFA_SESSION_VALIDATE_PER_IP', getClientIpAddress(request));
+    recordRateLimitAttempt('MFA_SESSION_VALIDATE_PER_IP', getClientIP(request));
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
@@ -174,7 +173,7 @@ export async function GET(request) {
  */
 export async function DELETE(request) {
   try {
-    const ipAddress = getClientIpAddress(request);
+    const ipAddress = getClientIP(request);
     
     // Rate limiting
     const rateLimitResult = checkRateLimit('MFA_SESSION_COMPLETE_PER_IP', ipAddress);
@@ -226,7 +225,7 @@ export async function DELETE(request) {
 
   } catch (error) {
     console.error('MFA session completion error:', error);
-    recordRateLimitAttempt('MFA_SESSION_COMPLETE_PER_IP', getClientIpAddress(request));
+    recordRateLimitAttempt('MFA_SESSION_COMPLETE_PER_IP', getClientIP(request));
     return NextResponse.json({
       success: false,
       error: 'Internal server error',

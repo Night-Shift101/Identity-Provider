@@ -84,7 +84,10 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Registration failed');
+        const errorMessage = typeof data.error === 'string' 
+          ? data.error 
+          : data.error?.message || 'Registration failed';
+        setError(errorMessage);
         return;
       }
 
@@ -151,7 +154,7 @@ export default function RegisterPage() {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error}
+              {typeof error === 'string' ? error : error.message || 'An error occurred'}
             </div>
           )}
 

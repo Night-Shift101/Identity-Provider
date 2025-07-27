@@ -73,14 +73,17 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Login failed');
+        const errorMessage = typeof data.error === 'string' 
+          ? data.error 
+          : data.error?.message || 'Login failed';
+        setError(errorMessage);
         return;
       }
 
       // Check if MFA is required
-      if (data.requiresMfa) {
+      if (data.requireMFA) {
         // Use secure URL parameter instead of sessionStorage
-        const mfaToken = encodeURIComponent(data.mfaToken || '');
+        const mfaToken = encodeURIComponent(data.mfaSessionId || '');
         router.push(`/auth/mfa?token=${mfaToken}`);
         return;
       }
@@ -336,7 +339,7 @@ export default function LoginPage() {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error}
+              {typeof error === 'string' ? error : error.message || 'An error occurred'}
             </div>
           )}
 

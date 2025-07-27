@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import TrustedDevices from '@/components/TrustedDevices';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,6 +26,15 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState([]);
   const [securityLogs, setSecurityLogs] = useState([]);
   const [passkeys, setPasskeys] = useState([]);
+  const [mfaSetup, setMfaSetup] = useState(null);
+  const [backupCodes, setBackupCodes] = useState([]);
+  
+  // MFA states
+  const [showMfaSetup, setShowMfaSetup] = useState(false);
+  const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [mfaVerificationCode, setMfaVerificationCode] = useState('');
+  const [isEnablingMfa, setIsEnablingMfa] = useState(false);
+  const [isDisablingMfa, setIsDisablingMfa] = useState(false);
   
   // Form state for profile editing
   const [profileForm, setProfileForm] = useState({
@@ -57,7 +67,9 @@ export default function DashboardPage() {
 
   const fetchUserProfile = async () => {
     try {
-      const response = await fetch('/api/auth/profile');
+      const response = await fetch('/api/auth/profile', {
+        credentials: 'include'
+      });
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/auth/login');
@@ -96,7 +108,9 @@ export default function DashboardPage() {
   // Fetch user devices
   const fetchDevices = async () => {
     try {
-      const response = await fetch('/api/account/devices');
+      const response = await fetch('/api/account/devices', {
+        credentials: 'include'
+      });
       const result = await response.json();
       
       if (result.success) {
@@ -110,7 +124,9 @@ export default function DashboardPage() {
   // Fetch user sessions  
   const fetchSessions = async () => {
     try {
-      const response = await fetch('/api/account/sessions');
+      const response = await fetch('/api/account/sessions', {
+        credentials: 'include'
+      });
       const result = await response.json();
       
       console.log('Sessions API response:', result);
@@ -129,7 +145,9 @@ export default function DashboardPage() {
   // Fetch security logs
   const fetchSecurityLogs = async () => {
     try {
-      const response = await fetch('/api/security/logs');
+      const response = await fetch('/api/security/logs', {
+        credentials: 'include'
+      });
       const result = await response.json();
       
       if (result.success) {
@@ -143,7 +161,9 @@ export default function DashboardPage() {
   // Fetch passkeys
   const fetchPasskeys = async () => {
     try {
-      const response = await fetch('/api/auth/passkeys');
+      const response = await fetch('/api/auth/passkeys', {
+        credentials: 'include'
+      });
       const result = await response.json();
       
       if (result.success) {
@@ -163,6 +183,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(profileForm),
       });
 
@@ -209,6 +230,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -243,6 +265,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
@@ -275,6 +298,7 @@ export default function DashboardPage() {
     try {
       const response = await fetch(`/api/devices/${deviceId}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -300,6 +324,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ sessionId }),
       });
 
@@ -325,6 +350,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ action: 'delete', passkeyId }),
       });
 
@@ -344,6 +370,7 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
+        credentials: 'include',
       });
       
       if (response.ok) {
@@ -351,6 +378,148 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('Logout error:', err);
+    }
+  };
+
+  // MFA Setup Functions
+  const handleStartMfaSetup = async () => {
+    setIsEnablingMfa(true);
+    try {
+      const response = await fetch('/api/auth/mfa', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'initialize'
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setMfaSetup(result.data);
+        setShowMfaSetup(true);
+        setError('');
+      } else {
+        setError(result.error || 'Failed to start MFA setup');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsEnablingMfa(false);
+    }
+  };
+
+  const handleEnableMfa = async () => {
+    if (!mfaVerificationCode || mfaVerificationCode.length !== 6) {
+      setError('Please enter a valid 6-digit verification code');
+      return;
+    }
+
+    setIsEnablingMfa(true);
+    try {
+      const response = await fetch('/api/auth/mfa', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'verify',
+          secret: mfaSetup.secret,
+          token: mfaVerificationCode
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setUser(prev => ({ ...prev, mfaEnabled: true }));
+        setBackupCodes(result.data.backupCodes || []);
+        setShowMfaSetup(false);
+        setShowBackupCodes(true);
+        setMfaVerificationCode('');
+        setError('');
+        setSuccessMessage('MFA enabled successfully! Please save your backup codes.');
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        setError(result.error || 'Failed to enable MFA');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsEnablingMfa(false);
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    if (!window.confirm('Are you sure you want to disable MFA? This will make your account less secure.')) {
+      return;
+    }
+
+    setIsDisablingMfa(true);
+    try {
+      const response = await fetch('/api/auth/mfa', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'disable'
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setUser(prev => ({ ...prev, mfaEnabled: false }));
+        setBackupCodes([]);
+        setError('');
+        setSuccessMessage('MFA disabled successfully.');
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        setError(result.error || 'Failed to disable MFA');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsDisablingMfa(false);
+    }
+  };
+
+  const handleRegenerateBackupCodes = async () => {
+    if (!window.confirm('Are you sure you want to regenerate backup codes? Your old codes will no longer work.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/mfa', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'regenerate-backup-codes'
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setBackupCodes(result.data.backupCodes || []);
+        setShowBackupCodes(true);
+        setError('');
+        setSuccessMessage('New backup codes generated successfully.');
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        setError(result.error || 'Failed to regenerate backup codes');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
     }
   };
 
@@ -726,37 +895,202 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Trusted Devices */}
+        {/* Trusted Devices & Active Sessions */}
+        <TrustedDevices />
+
+        {/* Multi-Factor Authentication */}
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-black">Trusted Devices</h2>
+            <h2 className="text-lg font-semibold text-black">Multi-Factor Authentication</h2>
+            <p className="text-sm text-gray-600 mt-1">Add an extra layer of security to your account</p>
           </div>
           <div className="p-6">
-            {devices.length === 0 ? (
-              <p className="text-gray-500">No trusted devices found.</p>
-            ) : (
+            {user?.mfaEnabled ? (
               <div className="space-y-4">
-                {devices.map((device) => (
-                  <div key={device.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
                     <div>
-                      <h3 className="font-medium text-black">{device.name || 'Unknown Device'}</h3>
-                      <p className="text-sm text-gray-500">
-                        Last seen: {device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Unknown'}
-                      </p>
+                      <h3 className="font-medium text-green-800">MFA Enabled</h3>
+                      <p className="text-sm text-green-600">Your account is protected with multi-factor authentication</p>
                     </div>
+                  </div>
+                  <button
+                    onClick={handleDisableMfa}
+                    disabled={isDisablingMfa}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {isDisablingMfa ? 'Disabling...' : 'Disable MFA'}
+                  </button>
+                </div>
+                
+                <div className="border-t pt-4">
+                  <h4 className="font-medium text-gray-900 mb-2">Backup Codes</h4>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Use these codes to access your account if you lose your authenticator device
+                  </p>
+                  <div className="space-x-3">
                     <button
-                      onClick={() => handleRemoveDevice(device.id)}
-                      disabled={isRemovingDevice === device.id}
-                      className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                      onClick={() => setShowBackupCodes(true)}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                     >
-                      {isRemovingDevice === device.id ? 'Removing...' : 'Remove'}
+                      View Codes
+                    </button>
+                    <button
+                      onClick={handleRegenerateBackupCodes}
+                      className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+                    >
+                      Regenerate Codes
                     </button>
                   </div>
-                ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
+                    <div>
+                      <h3 className="font-medium text-yellow-800">MFA Disabled</h3>
+                      <p className="text-sm text-yellow-600">Enable MFA for enhanced account security</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleStartMfaSetup}
+                    disabled={isEnablingMfa}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isEnablingMfa ? 'Starting...' : 'Enable MFA'}
+                  </button>
+                </div>
+                
+                <div className="border-t pt-4">
+                  <h4 className="font-medium text-gray-900 mb-2">What is MFA?</h4>
+                  <p className="text-sm text-gray-600">
+                    Multi-Factor Authentication adds an extra layer of security by requiring a second form of 
+                    verification in addition to your password. Use an authenticator app like Google Authenticator 
+                    or Authy to generate time-based codes.
+                  </p>
+                </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* MFA Setup Modal */}
+        {showMfaSetup && mfaSetup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Enable Multi-Factor Authentication</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    1. Install an authenticator app like Google Authenticator or Authy
+                  </p>
+                  <p className="text-sm text-gray-600 mb-3">
+                    2. Scan this QR code with your authenticator app:
+                  </p>
+                  <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
+                    <img 
+                      src={mfaSetup.qrCode} 
+                      alt="MFA QR Code" 
+                      className="w-48 h-48"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600 mt-3">
+                    Or manually enter this secret: <code className="bg-gray-100 px-2 py-1 rounded text-xs">{mfaSetup.secret}</code>
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 mb-2">
+                    3. Enter the 6-digit code from your authenticator app:
+                  </label>
+                  <input
+                    id="mfaCode"
+                    type="text"
+                    value={mfaVerificationCode}
+                    onChange={(e) => setMfaVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="000000"
+                    maxLength="6"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowMfaSetup(false);
+                    setMfaVerificationCode('');
+                    setMfaSetup(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEnableMfa}
+                  disabled={isEnablingMfa || mfaVerificationCode.length !== 6}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isEnablingMfa ? 'Enabling...' : 'Enable MFA'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Backup Codes Modal */}
+        {showBackupCodes && backupCodes.length > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">MFA Backup Codes</h3>
+              
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Save these backup codes in a safe place. Each code can only be used once.
+                </p>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+                    {backupCodes.map((code, index) => (
+                      <div key={index} className="text-center py-1">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Important:</strong> Store these codes securely. If you lose access to your 
+                    authenticator device, these codes are the only way to regain access to your account.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    const codesText = backupCodes.join('\n');
+                    navigator.clipboard.writeText(codesText);
+                  }}
+                  className="px-4 py-2 text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200"
+                >
+                  Copy Codes
+                </button>
+                <button
+                  onClick={() => setShowBackupCodes(false)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Passkeys */}
         <div className="bg-white rounded-lg shadow mb-8">
