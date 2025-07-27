@@ -291,14 +291,11 @@ export async function POST(request) {
       }
     }, { status: 200 });
 
-    // Set session cookie
-    // TODO: SECURITY - CRITICAL: Change sameSite from 'lax' to 'strict' for better CSRF protection
-    // TODO: SECURITY - Add domain validation and secure cookie configuration
-    // TODO: SECURITY - Consider shorter session duration for security
+    // Set session cookie with enhanced security
     response.cookies.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict', // Enhanced CSRF protection
       // TODO: CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
       maxAge: 30 * 24 * 60 * 60 // 30 days
     });

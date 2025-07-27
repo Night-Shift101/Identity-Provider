@@ -17,8 +17,7 @@ function createTransporter() {
   // TODO: MONITORING - Add email delivery monitoring and alerts
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    // TODO: SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
-    port: parseInt(process.env.SMTP_PORT) || 587,
+    port: parseInt(process.env.SMTP_PORT, 10) || 587,
     secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,

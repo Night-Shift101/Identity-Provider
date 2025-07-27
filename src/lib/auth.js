@@ -15,8 +15,7 @@ import crypto from 'crypto';
  */
 export async function hashPassword(password) {
   try {
-    // TODO: SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
-    const rounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS, 10) || 12;
     const hashedPassword = await bcrypt.hash(password, rounds);
     
     return {
@@ -141,12 +140,15 @@ export function generateSecureToken(length = 32) {
  * @returns {string} - Random string
  */
 export function generateRandomString(length = 16) {
-  // TODO: SECURITY - Replace Math.random() with crypto.getRandomValues() for cryptographic security
-  // TODO: PERFORMANCE - Consider using crypto.randomBytes instead for better performance
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
+  
+  // Use crypto.getRandomValues() for cryptographic security
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  
   for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(array[i] % chars.length);
   }
   return result;
 }

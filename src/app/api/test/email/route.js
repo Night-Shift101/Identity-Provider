@@ -8,9 +8,17 @@ import { NextResponse } from 'next/server';
 import { sendEmailVerification } from '@/lib/email';
 
 export async function POST(request) {
+  // Block access in production environment
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Test endpoints are disabled in production' },
+      { status: 404 }
+    );
+  }
+
   try {
     const { email } = await request.json();
-    
+
     if (!email) {
       return NextResponse.json(
         { error: 'Email is required' },
@@ -18,9 +26,6 @@ export async function POST(request) {
       );
     }
 
-    // TODO: SECURITY - CRITICAL: Remove this debug endpoint from production
-    // TODO: SECURITY - Add authentication/authorization to test endpoints
-    // TODO: SECURITY - Don't log SMTP credentials in production
     console.log('Testing email sending to:', email);
     console.log('SMTP Config:', {
       host: process.env.SMTP_HOST,

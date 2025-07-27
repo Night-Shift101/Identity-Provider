@@ -69,25 +69,8 @@ export default function RootLayout({ children }) {
           </div>
         </div>
 
-        {/* Global scripts */}
-        {/* TODO: SECURITY-Critical - Remove dangerouslySetInnerHTML and use external script files or proper React error boundaries */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Global error handler for unhandled promise rejections
-              window.addEventListener('unhandledrejection', function(event) {
-                console.error('Unhandled promise rejection:', event.reason);
-                // You could send this to an error reporting service
-              });
-
-              // Global error handler
-              window.addEventListener('error', function(event) {
-                console.error('Global error:', event.error);
-                // You could send this to an error reporting service
-              });
-            `,
-          }}
-        />
+        {/* External error handling script - safer than dangerouslySetInnerHTML */}
+        <script src="/js/error-handler.js"></script>
       </body>
     </html>
   );
