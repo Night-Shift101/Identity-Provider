@@ -331,15 +331,25 @@ export async function sendPasswordReset(email, resetToken, firstName, senderIP =
 
     const info = await transporter.sendMail(mailOptions);
 
+    // Record successful email send for rate limiting
+    recordEmailAttempt(email, senderIP);
+
     return {
       success: true,
       error: null,
-      data: { messageId: info.messageId }
+      data: { 
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected
+      }
     };
   } catch (err) {
+    console.error('Password reset email sending error:', err);
+    recordEmailAttempt(email, senderIP);
+    
     return {
       success: false,
-      error: err?.message || 'Email sending failed',
+      error: err?.message || 'Failed to send password reset email',
       data: null
     };
   }
@@ -406,17 +416,17 @@ export async function sendSecurityAlert(email, alertData, senderIP = '127.0.0.1'
           </div>
           
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e9ecef;">
-            <h2 style="color: #495057; margin-top: 0;">${alertData.title}</h2>
+            <h2 style="color: #495057; margin-top: 0;">${sanitizedTitle}</h2>
             
-            <p>${alertData.message}</p>
+            <p>${sanitizedMessage}</p>
             
             <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
               <h4 style="color: #856404; margin-top: 0;">Activity Details:</h4>
               <ul style="color: #856404; margin: 10px 0;">
-                ${alertData.location ? `<li><strong>Location:</strong> ${alertData.location}</li>` : ''}
-                ${alertData.device ? `<li><strong>Device:</strong> ${alertData.device}</li>` : ''}
-                ${alertData.ipAddress ? `<li><strong>IP Address:</strong> ${alertData.ipAddress}</li>` : ''}
-                ${alertData.timestamp ? `<li><strong>Time:</strong> ${alertData.timestamp}</li>` : ''}
+                ${alertData.location ? `<li><strong>Location:</strong> ${sanitizeEmailContent(alertData.location)}</li>` : ''}
+                ${alertData.device ? `<li><strong>Device:</strong> ${sanitizeEmailContent(alertData.device)}</li>` : ''}
+                ${alertData.ipAddress ? `<li><strong>IP Address:</strong> ${sanitizeEmailContent(alertData.ipAddress)}</li>` : ''}
+                ${alertData.timestamp ? `<li><strong>Time:</strong> ${sanitizeEmailContent(alertData.timestamp)}</li>` : ''}
               </ul>
             </div>
             
@@ -437,35 +447,74 @@ export async function sendSecurityAlert(email, alertData, senderIP = '127.0.0.1'
 
     const info = await transporter.sendMail(mailOptions);
 
+    // Record successful email send for rate limiting
+    recordEmailAttempt(email, senderIP);
+
     return {
       success: true,
       error: null,
-      data: { messageId: info.messageId }
+      data: { 
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected
+      }
     };
   } catch (err) {
+    console.error('Security alert email sending error:', err);
+    recordEmailAttempt(email, senderIP);
+    
     return {
       success: false,
-      error: err?.message || 'Email sending failed',
+      error: err?.message || 'Failed to send security alert email',
       data: null
     };
   }
 }
 
 /**
- * Send login notification email
- * @param {string} email - Recipient email
- * @param {Object} loginData - Login data
+ * Send login notification email with rate limiting and security measures
+ * @param {string} email - Recipient email address
+ * @param {Object} loginData - Login notification information
+ * @param {string} [senderIP] - IP address of sender for rate limiting
  * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * @author IdP System
  */
-export async function sendLoginNotification(email, loginData) {
+export async function sendLoginNotification(email, loginData, senderIP = '127.0.0.1') {
   try {
-    const transporter = createTransporter();
-    const appName = process.env.APP_NAME || 'Identity Provider';
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    // Check rate limits first
+    const rateLimitCheck = checkEmailRateLimit(email, senderIP);
+    if (!rateLimitCheck.success) {
+      return rateLimitCheck;
+    }
+
+    // Create transporter with validation
+    const transporterResult = createTransporter();
+    if (!transporterResult.success) {
+      recordEmailAttempt(email, senderIP);
+      return transporterResult;
+    }
+
+    const transporter = transporterResult.data;
+    
+    // Use validated configuration and sanitize inputs
+    const appName = sanitizeEmailContent(config.appName);
+    const appUrl = config.appUrl;
+    const sanitizedEmail = email.trim().toLowerCase();
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      recordEmailAttempt(email, senderIP);
+      return {
+        success: false,
+        error: 'Invalid email format',
+        data: null
+      };
+    }
     
     const mailOptions = {
       from: process.env.EMAIL_FROM,
-      to: email,
+      to: sanitizedEmail,
       subject: `New login to your ${appName} account`,
       html: `
         <!DOCTYPE html>
@@ -488,10 +537,10 @@ export async function sendLoginNotification(email, loginData) {
             <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;">
               <h4 style="color: #155724; margin-top: 0;">Login Details:</h4>
               <ul style="color: #155724; margin: 10px 0;">
-                ${loginData.location ? `<li><strong>Location:</strong> ${loginData.location}</li>` : ''}
-                ${loginData.device ? `<li><strong>Device:</strong> ${loginData.device}</li>` : ''}
-                ${loginData.ipAddress ? `<li><strong>IP Address:</strong> ${loginData.ipAddress}</li>` : ''}
-                ${loginData.timestamp ? `<li><strong>Time:</strong> ${loginData.timestamp}</li>` : ''}
+                ${loginData.location ? `<li><strong>Location:</strong> ${sanitizeEmailContent(loginData.location)}</li>` : ''}
+                ${loginData.device ? `<li><strong>Device:</strong> ${sanitizeEmailContent(loginData.device)}</li>` : ''}
+                ${loginData.ipAddress ? `<li><strong>IP Address:</strong> ${sanitizeEmailContent(loginData.ipAddress)}</li>` : ''}
+                ${loginData.timestamp ? `<li><strong>Time:</strong> ${sanitizeEmailContent(loginData.timestamp)}</li>` : ''}
               </ul>
             </div>
             
@@ -514,39 +563,70 @@ export async function sendLoginNotification(email, loginData) {
 
     const info = await transporter.sendMail(mailOptions);
 
+    // Record successful email send for rate limiting
+    recordEmailAttempt(email, senderIP);
+
     return {
       success: true,
       error: null,
-      data: { messageId: info.messageId }
+      data: { 
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected
+      }
     };
   } catch (err) {
+    console.error('Login notification email sending error:', err);
+    recordEmailAttempt(email, senderIP);
+    
     return {
       success: false,
-      error: err?.message || 'Email sending failed',
+      error: err?.message || 'Failed to send login notification email',
       data: null
     };
   }
 }
 
 /**
- * Test email configuration
+ * Test email configuration and transporter connectivity
  * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+ * @author IdP System
  */
 export async function testEmailConfiguration() {
   try {
-    const transporter = createTransporter();
+    // Create transporter with validation
+    const transporterResult = createTransporter();
+    if (!transporterResult.success) {
+      return transporterResult;
+    }
+
+    const transporter = transporterResult.data;
+    
+    // Verify the connection configuration
     await transporter.verify();
 
     return {
       success: true,
       error: null,
-      data: { status: 'Email configuration is valid' }
+      data: { 
+        status: 'Email configuration is valid',
+        smtp: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          secure: parseInt(process.env.SMTP_PORT, 10) === 465
+        }
+      }
     };
   } catch (err) {
+    console.error('Email configuration test failed:', err);
+    
     return {
       success: false,
       error: err?.message || 'Email configuration test failed',
-      data: null
+      data: {
+        status: 'Email configuration is invalid',
+        details: err?.message
+      }
     };
   }
 }
