@@ -44,8 +44,6 @@
    │  │  ├─ auth
    │  │  │  ├─ login
    │  │  │  │  └─ page.js
-   │  │  │  │     ├─ line 82: TODO : SECURITY - Don't store session data in sessionStorage, use secure httpOnly cookies
-   │  │  │  │     └─ line 83: TODO : SECURITY - Add CSRF protection for MFA flow
    │  │  │  ├─ mfa
    │  │  │  │  └─ page.js
    │  │  │  │     ├─ line 21: TODO : SECURITY - Replace sessionStorage with secure server-side session management
