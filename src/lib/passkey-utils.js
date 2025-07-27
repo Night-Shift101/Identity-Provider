@@ -40,6 +40,9 @@ export async function supportsPasskeys() {
  */
 export function isTrustedDevice() {
   try {
+    // TODO: SECURITY - CRITICAL: localStorage can be manipulated by client-side scripts
+    // TODO: SECURITY - Implement server-side device fingerprinting instead
+    // TODO: PRIVACY - Add user consent for device fingerprinting
     // Check if device has been used before (localStorage indicates returning user)
     const hasLocalData = localStorage.getItem('deviceFingerprint') || 
                         localStorage.getItem('lastLogin') ||
@@ -72,6 +75,10 @@ export function isTrustedDevice() {
  */
 export function getDeviceFingerprint() {
   try {
+    // TODO: SECURITY - This fingerprinting method is easily spoofable
+    // TODO: PRIVACY - Add user consent and privacy disclosure
+    // TODO: PERFORMANCE - Cache fingerprint instead of recalculating
+    // TODO: SECURITY - Use more robust fingerprinting techniques
     const factors = [
       navigator.userAgent,
       navigator.language,
@@ -83,6 +90,7 @@ export function getDeviceFingerprint() {
     ];
 
     // Create a simple hash
+    // TODO: SECURITY - Replace btoa with proper cryptographic hashing
     const fingerprint = factors.join('|');
     return btoa(fingerprint).substring(0, 16);
   } catch (error) {

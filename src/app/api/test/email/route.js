@@ -18,6 +18,9 @@ export async function POST(request) {
       );
     }
 
+    // TODO: SECURITY - CRITICAL: Remove this debug endpoint from production
+    // TODO: SECURITY - Add authentication/authorization to test endpoints
+    // TODO: SECURITY - Don't log SMTP credentials in production
     console.log('Testing email sending to:', email);
     console.log('SMTP Config:', {
       host: process.env.SMTP_HOST,
@@ -29,6 +32,8 @@ export async function POST(request) {
 
     const result = await sendEmailVerification(email, 'test-token-123', 'Test');
     
+    // TODO: LOGGING - Use proper logging framework instead of console.log
+    // TODO: SECURITY - Remove debug logging in production
     console.log('Email result:', result);
     
     return NextResponse.json({
@@ -38,6 +43,8 @@ export async function POST(request) {
     });
 
   } catch (error) {
+    // TODO: LOGGING - Use proper logging framework instead of console.error
+    // TODO: SECURITY - Don't expose error details in production
     console.error('Email test error:', error);
     return NextResponse.json(
       { error: 'Internal server error', details: error.message },

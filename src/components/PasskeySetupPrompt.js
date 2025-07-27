@@ -27,7 +27,14 @@ export default function PasskeySetupPrompt({ isOpen, onClose, onSetup, onSkip })
     try {
       await onSetup();
     } catch (error) {
+      // TODO: LOGGING - Use proper logging framework instead of console.error
+      // TODO: UX - Add user-friendly error messages for different error types
+      // TODO: ERROR_HANDLING - Handle specific WebAuthn error codes
       console.error('Passkey setup error:', error);
+      
+      if (error.name === 'NotAllowedError') {
+        // User cancelled
+      }
     } finally {
       setIsLoading(false);
     }

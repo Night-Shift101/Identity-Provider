@@ -15,6 +15,7 @@ import crypto from 'crypto';
  */
 export async function hashPassword(password) {
   try {
+    // TODO: SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
     const rounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
     const hashedPassword = await bcrypt.hash(password, rounds);
     
@@ -64,6 +65,8 @@ export async function verifyPassword(password, hash) {
  */
 export async function generateAccessToken(payload, expiresIn = '15m') {
   try {
+    // TODO: SECURITY - Add startup validation for JWT_SECRET instead of runtime check
+    // TODO: SECURITY - Consider rotating JWT secrets and key versioning
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       return {
@@ -96,6 +99,8 @@ export async function generateAccessToken(payload, expiresIn = '15m') {
  */
 export async function verifyAccessToken(token) {
   try {
+    // TODO: SECURITY - Add startup validation for JWT_SECRET instead of runtime check
+    // TODO: SECURITY - Implement token blacklisting for logout/revocation
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       return {
@@ -136,6 +141,8 @@ export function generateSecureToken(length = 32) {
  * @returns {string} - Random string
  */
 export function generateRandomString(length = 16) {
+  // TODO: SECURITY - Replace Math.random() with crypto.getRandomValues() for cryptographic security
+  // TODO: PERFORMANCE - Consider using crypto.randomBytes instead for better performance
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
   for (let i = 0; i < length; i++) {
@@ -169,6 +176,10 @@ export function isValidEmail(email) {
  * @returns {{isValid: boolean, errors: string[]}} - Validation result
  */
 export function validatePassword(password) {
+  // TODO: SECURITY - Add check against common password lists (rockyou.txt, etc.)
+  // TODO: SECURITY - Add password history check to prevent reuse
+  // TODO: SECURITY - Calculate password entropy score
+  // TODO: SECURITY - Add check for keyboard patterns (qwerty, 123456, etc.)
   const errors = [];
   
   if (password.length < 8) {

@@ -1,0 +1,165 @@
+
+├─ src
+│  ├─ app
+│  │  ├─ api
+│  │  │  ├─ auth
+│  │  │  │  ├─ login
+│  │  │  │  │  └─ route.js
+│  │  │  │  │     ├─ line 14: TODO : SECURITY-Critical - Implement proper rate limiting with configurable thresholds
+│  │  │  │  │     ├─ line 26: TODO : SECURITY-Important - Add input sanitization and validation for all parameters
+│  │  │  │  │     ├─ line 37: TODO : SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
+│  │  │  │  │     ├─ line 38: TODO : SECURITY - Add rate limiting per IP address
+│  │  │  │  │     ├─ line 39: TODO : SECURITY - Implement geolocation blocking for suspicious regions
+│  │  │  │  │     ├─ line 57: TODO : SECURITY-Important - Implement structured error codes instead of plain text messages
+│  │  │  │  │     ├─ line 166: TODO : CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
+│  │  │  │  │     ├─ line 295: TODO : SECURITY - CRITICAL: Change sameSite from 'lax' to 'strict' for better CSRF protection
+│  │  │  │  │     ├─ line 296: TODO : SECURITY - Add domain validation and secure cookie configuration
+│  │  │  │  │     ├─ line 297: TODO : SECURITY - Consider shorter session duration for security
+│  │  │  │  │     ├─ line 302: TODO : CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
+│  │  │  │  │     ├─ line 309: TODO : SECURITY - Don't log sensitive information in production
+│  │  │  │  │     ├─ line 310: TODO : LOGGING - Use proper logging framework instead of console.error
+│  │  │  │  │     └─ line 311: TODO : MONITORING - Add error tracking and alerting
+│  │  │  │  ├─ oauth
+│  │  │  │  │  └─ route.js
+│  │  │  │  │     ├─ line 13: TODO : SECURITY - Move OAuth credentials to secure configuration service
+│  │  │  │  │     ├─ line 14: TODO : SECURITY - Add OAuth state parameter validation to prevent CSRF
+│  │  │  │  │     ├─ line 15: TODO : SECURITY - Implement OAuth PKCE for enhanced security
+│  │  │  │  │     ├─ line 135: TODO : SECURITY-Critical - Implement PKCE for OAuth2 flows to prevent authorization code interception
+│  │  │  │  │     ├─ line 182: TODO : SECURITY - Add state parameter validation to prevent CSRF attacks
+│  │  │  │  │     ├─ line 183: TODO : SECURITY - Implement nonce validation for OpenID Connect
+│  │  │  │  │     └─ line 184: TODO : ERROR_HANDLING - Add proper OAuth error handling and user feedback
+│  │  │  │  ├─ register
+│  │  │  │  │  └─ route.js
+│  │  │  │  │     ├─ line 7: TODO : FUNCTIONALITY - Implement API versioning for backward compatibility
+│  │  │  │  │     ├─ line 16: TOxDO : SECURITY - Add rate limiting for registration attempts
+│  │  │  │  │     ├─ line 17: TODO : SECURITY - Add CAPTCHA or similar anti-bot protection
+│  │  │  │  │     └─ line 18: TODO : SECURITY - Implement account enumeration protection
+│  │  │  │  └─ verify-email
+│  │  │  │     └─ route.js
+│  │  │  │        ├─ line 13: TODO : SECURITY - Add rate limiting for verification attempts
+│  │  │  │        ├─ line 14: TODO : SECURITY - Add protection against timing attacks
+│  │  │  │        ├─ line 15: TODO : SECURITY - Log suspicious verification patterns
+│  │  │  │        ├─ line 63: TODO : SECURITY - Validate and sanitize IP headers
+│  │  │  │        └─ line 64: TODO : SECURITY - Add geolocation tracking for verification attempts
+│  │  │  └─ test
+│  │  │     └─ route.js
+│  │  │        ├─ line 21: TODO : SECURITY - CRITICAL: Remove this debug endpoint from production
+│  │  │        ├─ line 22: TODO : SECURITY - Add authentication/authorization to test endpoints
+│  │  │        ├─ line 23: TODO : SECURITY - Don't log SMTP credentials in production
+│  │  │        ├─ line 35: TODO : LOGGING - Use proper logging framework instead of console.log
+│  │  │        ├─ line 36: TODO : SECURITY - Remove debug logging in production
+│  │  │        ├─ line 46: TODO : LOGGING - Use proper logging framework instead of console.error
+│  │  │        └─ line 47: TODO : SECURITY - Don't expose error details in production
+│  │  ├─ auth
+│  │  │  ├─ login
+│  │  │  │  └─ page.js
+│  │  │  │     ├─ line 82: TODO : SECURITY - Don't store session data in sessionStorage, use secure httpOnly cookies
+│  │  │  │     └─ line 83: TODO : SECURITY - Add CSRF protection for MFA flow
+│  │  │  ├─ mfa
+│  │  │  │  └─ page.js
+│  │  │  │     ├─ line 21: TODO : SECURITY - Replace sessionStorage with secure server-side session management
+│  │  │  │     ├─ line 22: TODO : SECURITY - Add session timeout and CSRF protection
+│  │  │  │     ├─ line 124: TODO : UX - Replace alert() with proper toast notification system
+│  │  │  │     ├─ line 125: TODO : SECURITY - Add rate limiting for backup code regeneration
+│  │  │  │     ├─ line 129: TODO : LOGGING - Use proper logging framework instead of console.error
+│  │  │  │     └─ line 179: TODO : ACCESSIBILITY - Add aria-label for screen readers describing which digit position this is
+│  │  │  ├─ register
+│  │  │  │  └─ page.js
+│  │  │  │     ├─ line 96: TODO : UX - Add user control over auto-redirect timing
+│  │  │  │     └─ line 97: TODO : ACCESSIBILITY - Announce redirect to screen readers
+│  │  │  └─ verify-email
+│  │  │     └─ page.js
+│  │  │        ├─ line 51: TODO : UX - Add user control over auto-redirect timing
+│  │  │        ├─ line 52: TODO : ACCESSIBILITY - Announce redirect to screen readers
+│  │  │        ├─ line 53: TODO : CONFIGURATION - Make auto-redirect timeout configurable
+│  │  │        ├─ line 70: TODO : UX - Replace alert() with proper toast notification system
+│  │  │        ├─ line 71: TODO : SECURITY - Add input validation for email parameter
+│  │  │        ├─ line 85: TODO : UX - Replace alert() with proper toast notification system
+│  │  │        ├─ line 86: TODO : ACCESSIBILITY - Add proper ARIA announcements for screen readers
+│  │  │        ├─ line 89: TODO : UX - Replace alert() with proper error handling UI
+│  │  │        ├─ line 93: TODO : UX - Replace alert() with proper error handling UI
+│  │  │        └─ line 94: TODO : LOGGING - Add proper error logging
+│  │  ├─ dashboard
+│  │  │  └─ page.js
+│  │  │     ├─ line 87: TODO : LOGGING - Use proper logging framework instead of console.error
+│  │  │     ├─ line 88: TODO : ERROR_HANDLING - Add user-friendly error messages
+│  │  │     ├─ line 89: TODO : UX - Show loading states and better error UI
+│  │  │     ├─ line 191: TODO : UX - Replace setTimeout with proper toast notification system
+│  │  │     ├─ line 192: TODO : ACCESSIBILITY - Announce success to screen readers
+│  │  │     ├─ line 221: TODO : UX - Replace setTimeout with proper toast notification system
+│  │  │     ├─ line 222: TODO : ACCESSIBILITY - Announce success to screen readers
+│  │  │     └─ line 797: TODO : FUNCTIONALITY - Add pagination and search functionality for security logs
+│  │  ├─ test-sessions
+│  │  │  └─ page.js
+│  │  │     ├─ line 20: TODO : SECURITY - Remove or protect debug endpoints in production
+│  │  │     ├─ line 21: TODO : LOGGING - Use proper logging framework instead of console.log
+│  │  │     ├─ line 42: TODO : FUNCTIONALITY - Implement session termination
+│  │  │     └─ line 43: TODO : LOGGING - Use proper logging framework instead of console.log
+│  │  └─ layout.js
+│  │     ├─ line 7: TODO : SECURITY-Critical - Implement Content Security Policy headers to prevent XSS attacks
+│  │     ├─ line 43: TODO : FUNCTIONALITY - Implement React Error Boundary for better error handling
+│  │     └─ line 73: TODO : SECURITY-Critical - Remove dangerouslySetInnerHTML and use external script files or proper React error boundaries
+│  ├─ components
+│  │  └─ PasskeySetupPrompt.js
+│  │     ├─ line 30: TODO : LOGGING - Use proper logging framework instead of console.error
+│  │     ├─ line 31: TODO : UX - Add user-friendly error messages for different error types
+│  │     └─ line 32: TODO : ERROR_HANDLING - Handle specific WebAuthn error codes
+│  ├─ lib
+│  │  ├─ auth.js
+│  │  │  ├─ line 18: TODO : SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
+│  │  │  ├─ line 68: TODO : SECURITY - Add startup validation for JWT_SECRET instead of runtime check
+│  │  │  ├─ line 69: TODO : SECURITY - Consider rotating JWT secrets and key versioning
+│  │  │  ├─ line 102: TODO : SECURITY - Add startup validation for JWT_SECRET instead of runtime check
+│  │  │  ├─ line 103: TODO : SECURITY - Implement token blacklisting for logout/revocation
+│  │  │  ├─ line 144: TODO : SECURITY - Replace Math.random() with crypto.getRandomValues() for cryptographic security
+│  │  │  ├─ line 145: TODO : PERFORMANCE - Consider using crypto.randomBytes instead for better performance
+│  │  │  ├─ line 179: TODO : SECURITY - Add check against common password lists (rockyou.txt, etc.)
+│  │  │  ├─ line 180: TODO : SECURITY - Add password history check to prevent reuse
+│  │  │  ├─ line 181: TODO : SECURITY - Calculate password entropy score
+│  │  │  └─ line 182: TODO : SECURITY - Add check for keyboard patterns (qwerty, 123456, etc.)
+│  │  ├─ database.js
+│  │  │  ├─ line 7: TODO : INFRASTRUCTURE - Implement database backup and disaster recovery procedures
+│  │  │  ├─ line 16: TODO : SECURITY - Add connection pooling limits and timeout configuration
+│  │  │  ├─ line 17: TODO : PERFORMANCE - Implement connection retry logic and circuit breaker
+│  │  │  └─ line 18: TODO : MONITORING - Add database connection monitoring and alerts
+│  │  ├─ email.js
+│  │  │  ├─ line 14: TODO : SECURITY - Add email rate limiting and anti-spam measures
+│  │  │  ├─ line 15: TODO : SECURITY - Implement email template sanitization
+│  │  │  ├─ line 16: TODO : RELIABILITY - Add email delivery retry logic and queue system
+│  │  │  ├─ line 17: TODO : MONITORING - Add email delivery monitoring and alerts
+│  │  │  ├─ line 20: TODO : SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
+│  │  │  ├─ line 40: TODO : SECURITY-Critical - Add validation for required environment variables
+│  │  │  └─ line 42: TODO : SECURITY-Critical - Don't hardcode localhost fallback in production
+│  │  ├─ passkey-utils.js
+│  │  │  ├─ line 43: TODO : SECURITY - CRITICAL: localStorage can be manipulated by client-side scripts
+│  │  │  ├─ line 44: TODO : SECURITY - Implement server-side device fingerprinting instead
+│  │  │  ├─ line 45: TODO : PRIVACY - Add user consent for device fingerprinting
+│  │  │  ├─ line 78: TODO : SECURITY - This fingerprinting method is easily spoofable
+│  │  │  ├─ line 79: TODO : PRIVACY - Add user consent and privacy disclosure
+│  │  │  ├─ line 80: TODO : PERFORMANCE - Cache fingerprint instead of recalculating
+│  │  │  ├─ line 81: TODO : SECURITY - Use more robust fingerprinting techniques
+│  │  │  └─ line 93: TODO : SECURITY - Replace btoa with proper cryptographic hashing
+│  │  ├─ security.js
+│  │  │  ├─ line 7: TODO : MONITORING - Implement metrics collection and alerting for security events
+│  │  │  ├─ line 50: TODO : SECURITY - Add proper IP validation and sanitization
+│  │  │  ├─ line 51: TODO : PRIVACY - Add user consent for geolocation tracking
+│  │  │  └─ line 52: TODO : PERFORMANCE - Cache geolocation results to avoid repeated API calls
+│  │  └─ webauthn.js
+│  │     ├─ line 37: TODO : SECURITY-Critical - Move to environment variable configuration
+│  │     ├─ line 80: TODO : SECURITY - CRITICAL: Replace global memory with Redis/secure storage
+│  │     ├─ line 81: TODO : SECURITY - Add challenge expiry and cleanup mechanism
+│  │     ├─ line 82: TODO : PERFORMANCE - This will cause memory leaks and race conditions in production
+│  │     ├─ line 133: TODO : CONFIGURATION - Make challenge timeout configurable via environment variables
+│  │     ├─ line 290: TODO : CONFIGURATION - Make authentication challenge timeout configurable via environment variables
+│  │     ├─ line 478: TODO : SECURITY - Implement proper challenge cleanup with configurable TTL
+│  │     ├─ line 479: TODO : PERFORMANCE - Add scheduled cleanup instead of on-demand
+│  │     └─ line 480: TODO : BUG - This cleanup runs on every registration, inefficient
+│  └─ middleware.js
+│     ├─ line 13: TODO : SECURITY - Add comprehensive route protection configuration
+│     ├─ line 14: TODO : PERFORMANCE - Optimize pattern matching for better performance
+│     ├─ line 99: TODO : SECURITY - CRITICAL: Implement proper session validation in middleware
+│     ├─ line 100: TODO : SECURITY - Add session expiry checking at edge level
+│     ├─ line 101: TODO : PERFORMANCE - Consider caching session validation results
+│     ├─ line 127: TODO : LOGGING - Use proper logging framework instead of console.error
+│     ├─ line 128: TODO : MONITORING - Add error tracking and alerting for middleware failures
+│     └─ line 129: TODO : SECURITY - Don't log sensitive information

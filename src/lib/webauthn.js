@@ -34,6 +34,7 @@ function bufferToBase64url(buffer) {
 // WebAuthn configuration
 const rpName = process.env.APP_NAME || 'Identity Provider';
 const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
+// TODO: SECURITY-Critical - Move to environment variable configuration
 const origin = process.env.APP_URL || 'http://localhost:3000';
 
 /**
@@ -76,6 +77,9 @@ export async function generatePasskeyRegistrationOptions(user, excludeCredential
     });
 
     // Store challenge temporarily (in production, use Redis or similar)
+    // TODO: SECURITY - CRITICAL: Replace global memory with Redis/secure storage
+    // TODO: SECURITY - Add challenge expiry and cleanup mechanism
+    // TODO: PERFORMANCE - This will cause memory leaks and race conditions in production
     if (!global.webauthnChallenges) {
       global.webauthnChallenges = new Map();
     }
@@ -126,6 +130,7 @@ export async function verifyPasskeyRegistration(user, registrationResponse, cred
     }
 
     // Check challenge age (5 minutes max)
+    // TODO: CONFIGURATION - Make challenge timeout configurable via environment variables
     if (Date.now() - storedChallenge.timestamp > 5 * 60 * 1000) {
       global.webauthnChallenges.delete(challengeKey);
       return {
@@ -282,6 +287,7 @@ export async function verifyPasskeyAuthentication(authenticationResponse, challe
     }
 
     // Check challenge age (5 minutes max)
+    // TODO: CONFIGURATION - Make authentication challenge timeout configurable via environment variables
     if (Date.now() - storedChallenge.timestamp > 5 * 60 * 1000) {
       global.webauthnChallenges.delete(challengeKey);
       return {
@@ -469,6 +475,9 @@ export async function renamePasskey(userId, credentialId, newName) {
  * Clean up old challenges
  */
 function cleanupOldChallenges() {
+  // TODO: SECURITY - Implement proper challenge cleanup with configurable TTL
+  // TODO: PERFORMANCE - Add scheduled cleanup instead of on-demand
+  // TODO: BUG - This cleanup runs on every registration, inefficient
   if (!global.webauthnChallenges) return;
   
   const now = Date.now();

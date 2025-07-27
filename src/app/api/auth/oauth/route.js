@@ -10,6 +10,9 @@ import { userDb, prisma } from '@/lib/database';
 import { logSecurityEvent } from '@/lib/security';
 
 // OAuth Provider configurations
+// TODO: SECURITY - Move OAuth credentials to secure configuration service
+// TODO: SECURITY - Add OAuth state parameter validation to prevent CSRF
+// TODO: SECURITY - Implement OAuth PKCE for enhanced security
 const OAUTH_PROVIDERS = {
   google: {
     name: 'Google',
@@ -129,6 +132,7 @@ async function handleGetAuthUrl(provider, userId) {
       timestamp: Date.now() 
     })).toString('base64');
 
+    // TODO: SECURITY-Critical - Implement PKCE for OAuth2 flows to prevent authorization code interception
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: `${process.env.APP_URL}/api/auth/oauth/callback`,
@@ -174,6 +178,10 @@ async function handleLinkAccount(provider, code, state, userId, request) {
 
     // Exchange code for access token
     const config = OAUTH_PROVIDERS[provider];
+    // Validate and exchange authorization code for access token
+    // TODO: SECURITY - Add state parameter validation to prevent CSRF attacks
+    // TODO: SECURITY - Implement nonce validation for OpenID Connect
+    // TODO: ERROR_HANDLING - Add proper OAuth error handling and user feedback
     const tokenResponse = await fetch(config.tokenUrl, {
       method: 'POST',
       headers: {
@@ -181,9 +189,8 @@ async function handleLinkAccount(provider, code, state, userId, request) {
         'Accept': 'application/json'
       },
       body: new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code,
+        grant_type: 'authorization_code',
+        code: code,
         redirect_uri: `${process.env.APP_URL}/api/auth/oauth/callback`
       })
     });

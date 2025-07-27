@@ -48,6 +48,9 @@ export default function VerifyEmailPage() {
       setSuccess(true);
       
       // Redirect to login after success
+      // TODO: UX - Add user control over auto-redirect timing
+      // TODO: ACCESSIBILITY - Announce redirect to screen readers
+      // TODO: CONFIGURATION - Make auto-redirect timeout configurable
       setTimeout(() => {
         router.push('/auth/login?verified=true');
       }, 3000);
@@ -64,6 +67,8 @@ export default function VerifyEmailPage() {
     try {
       const email = searchParams.get('email');
       if (!email) {
+        // TODO: UX - Replace alert() with proper toast notification system
+        // TODO: SECURITY - Add input validation for email parameter
         alert('Please enter your email address');
         return;
       }
@@ -77,11 +82,16 @@ export default function VerifyEmailPage() {
       });
 
       if (response.ok) {
+        // TODO: UX - Replace alert() with proper toast notification system
+        // TODO: ACCESSIBILITY - Add proper ARIA announcements for screen readers
         alert('Verification email sent! Please check your inbox.');
       } else {
+        // TODO: UX - Replace alert() with proper error handling UI
         alert('Failed to send verification email. Please try again.');
       }
     } catch (err) {
+      // TODO: UX - Replace alert() with proper error handling UI
+      // TODO: LOGGING - Add proper error logging
       alert('Network error. Please try again.');
     } finally {
       setResending(false);

@@ -90,9 +90,13 @@ export default function RegisterPage() {
 
       setSuccess('Account created successfully! Please check your email to verify your account.');
       
-      // Redirect to login after 3 seconds
+      // Show success message and redirect
+      setSuccess('Account created successfully! Redirecting to login...');
+      
+      // TODO: UX - Add user control over auto-redirect timing
+      // TODO: ACCESSIBILITY - Announce redirect to screen readers
       setTimeout(() => {
-        router.push('/auth/login');
+        router.push('/auth/login?registered=true');
       }, 3000);
       
     } catch (err) {

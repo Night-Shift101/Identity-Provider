@@ -4,6 +4,7 @@
  * @author IdP System
  */
 
+// TODO: SECURITY-Critical - Implement Content Security Policy headers to prevent XSS attacks
 import { Inter } from 'next/font/google';
 import './globals.css';
 
@@ -38,7 +39,9 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className={`${inter.className} min-h-screen bg-gray-50 antialiased`}>
+            <body className={inter.className}>
+        {/* TODO: FUNCTIONALITY - Implement React Error Boundary for better error handling */}
+        {children}
         <div id="root" className="min-h-screen">
           {children}
         </div>
@@ -67,6 +70,7 @@ export default function RootLayout({ children }) {
         </div>
 
         {/* Global scripts */}
+        {/* TODO: SECURITY-Critical - Remove dangerouslySetInnerHTML and use external script files or proper React error boundaries */}
         <script
           dangerouslySetInnerHTML={{
             __html: `

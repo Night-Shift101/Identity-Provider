@@ -11,8 +11,13 @@ import nodemailer from 'nodemailer';
  * @returns {Object} - Nodemailer transporter
  */
 function createTransporter() {
+  // TODO: SECURITY - Add email rate limiting and anti-spam measures
+  // TODO: SECURITY - Implement email template sanitization
+  // TODO: RELIABILITY - Add email delivery retry logic and queue system
+  // TODO: MONITORING - Add email delivery monitoring and alerts
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
+    // TODO: SECURITY-Important - parseInt without radix can cause issues with leading zeros or hex values
     port: parseInt(process.env.SMTP_PORT) || 587,
     secure: false, // true for 465, false for other ports
     auth: {
@@ -32,7 +37,9 @@ function createTransporter() {
 export async function sendEmailVerification(email, verificationToken, firstName) {
   try {
     const transporter = createTransporter();
+    // TODO: SECURITY-Critical - Add validation for required environment variables 
     const appName = process.env.APP_NAME || 'Identity Provider';
+    // TODO: SECURITY-Critical - Don't hardcode localhost fallback in production
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const verificationUrl = `${appUrl}/auth/verify-email?token=${verificationToken}`;
     

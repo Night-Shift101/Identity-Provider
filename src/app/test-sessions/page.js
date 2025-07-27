@@ -17,6 +17,8 @@ export default function TestSessionsPage() {
 
   const fetchSessions = async () => {
     try {
+      // TODO: SECURITY - Remove or protect debug endpoints in production
+      // TODO: LOGGING - Use proper logging framework instead of console.log
       console.log('Fetching test sessions...');
       const response = await fetch('/api/test-sessions');
       const result = await response.json();
@@ -25,24 +27,22 @@ export default function TestSessionsPage() {
       
       if (result.success) {
         console.log('Setting sessions:', result.data.sessions);
-        setSessions(result.data.sessions || []);
+        setSessions(result.data.sessions);
       } else {
         console.error('Sessions API error:', result.error);
+        setError('Failed to load sessions: ' + result.error);
       }
     } catch (err) {
       console.error('Session fetch error:', err);
-    } finally {
-      setIsLoading(false);
+      setError('Network error');
     }
   };
 
-  const handleTerminateSession = (sessionId) => {
+  const terminateSession = (sessionId) => {
+    // TODO: FUNCTIONALITY - Implement session termination
+    // TODO: LOGGING - Use proper logging framework instead of console.log
     console.log('Terminate session:', sessionId);
-    // Remove from sessions array for demo
-    setSessions(prev => prev.filter(s => s.id !== sessionId));
-  };
-
-  if (isLoading) {
+  };  if (isLoading) {
     return <div className="p-8">Loading...</div>;
   }
 

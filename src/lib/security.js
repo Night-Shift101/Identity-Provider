@@ -4,6 +4,7 @@
  * @author IdP System
  */
 
+// TODO: MONITORING - Implement metrics collection and alerting for security events
 import { UAParser } from 'ua-parser-js';
 import { createSecureHash } from './auth.js';
 import { prisma } from './database.js';
@@ -46,6 +47,9 @@ export function parseUserAgent(userAgent) {
 export async function getLocationFromIp(ipAddress) {
   try {
     // Skip local/private IPs
+    // TODO: SECURITY - Add proper IP validation and sanitization
+    // TODO: PRIVACY - Add user consent for geolocation tracking
+    // TODO: PERFORMANCE - Cache geolocation results to avoid repeated API calls
     if (ipAddress === '127.0.0.1' || ipAddress === '::1' || ipAddress.startsWith('192.168.') || ipAddress.startsWith('10.')) {
       return {
         success: true,

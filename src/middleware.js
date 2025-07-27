@@ -10,6 +10,8 @@ export function middleware(request) {
   const pathname = request.nextUrl.pathname;
   
   // Skip middleware for static files and API routes that don't need auth
+  // TODO: SECURITY - Add comprehensive route protection configuration
+  // TODO: PERFORMANCE - Optimize pattern matching for better performance
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
@@ -94,6 +96,9 @@ async function handleAuthentication(request) {
       // For now, we'll do a basic check. In a full implementation,
       // you'd validate the session here, but that requires database access
       // which is better handled in the API routes themselves.
+      // TODO: SECURITY - CRITICAL: Implement proper session validation in middleware
+      // TODO: SECURITY - Add session expiry checking at edge level
+      // TODO: PERFORMANCE - Consider caching session validation results
       
       // Add user context headers for API routes
       if (pathname.startsWith('/api/')) {
@@ -119,6 +124,9 @@ async function handleAuthentication(request) {
     return NextResponse.next();
 
   } catch (error) {
+    // TODO: LOGGING - Use proper logging framework instead of console.error
+    // TODO: MONITORING - Add error tracking and alerting for middleware failures
+    // TODO: SECURITY - Don't log sensitive information
     console.error('Middleware error:', error);
     
     // For API routes, return error response

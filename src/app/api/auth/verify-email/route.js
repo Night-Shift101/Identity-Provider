@@ -10,6 +10,9 @@ import { logSecurityEvent } from '@/lib/security';
 
 export async function POST(request) {
   try {
+    // TODO: SECURITY - Add rate limiting for verification attempts
+    // TODO: SECURITY - Add protection against timing attacks
+    // TODO: SECURITY - Log suspicious verification patterns
     const { token } = await request.json();
 
     if (!token) {
@@ -57,6 +60,8 @@ export async function POST(request) {
     }
 
     // Get client information for logging
+    // TODO: SECURITY - Validate and sanitize IP headers
+    // TODO: SECURITY - Add geolocation tracking for verification attempts
     const clientIp = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
                      '127.0.0.1';

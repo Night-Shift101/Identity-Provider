@@ -4,6 +4,7 @@
  * @author IdP System
  */
 
+// TODO: INFRASTRUCTURE - Implement database backup and disaster recovery procedures
 import { PrismaClient } from '@prisma/client';
 
 // Global Prisma instance to prevent multiple connections in development
@@ -12,6 +13,9 @@ const globalForPrisma = globalThis;
 /**
  * Prisma client instance with proper configuration
  */
+// TODO: SECURITY - Add connection pooling limits and timeout configuration
+// TODO: PERFORMANCE - Implement connection retry logic and circuit breaker
+// TODO: MONITORING - Add database connection monitoring and alerts
 export const prisma = globalForPrisma.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
 });

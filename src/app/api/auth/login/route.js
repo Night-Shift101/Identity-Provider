@@ -11,6 +11,7 @@ import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, l
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
 import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
 
+// TODO: SECURITY-Critical - Implement proper rate limiting with configurable thresholds
 export async function POST(request) {
   try {
     const { 
@@ -22,6 +23,8 @@ export async function POST(request) {
       deviceFingerprint 
     } = await request.json();
 
+    // TODO: SECURITY-Important - Add input sanitization and validation for all parameters
+
     // Validate required fields
     if (!email || !password) {
       return NextResponse.json(
@@ -31,6 +34,9 @@ export async function POST(request) {
     }
 
     // Get client information
+    // TODO: SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
+    // TODO: SECURITY - Add rate limiting per IP address
+    // TODO: SECURITY - Implement geolocation blocking for suspicious regions
     const clientIp = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
                      '127.0.0.1';
@@ -48,6 +54,7 @@ export async function POST(request) {
       });
 
       return NextResponse.json(
+        // TODO: SECURITY-Important - Implement structured error codes instead of plain text messages
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
@@ -156,6 +163,7 @@ export async function POST(request) {
 
     // Generate session token
     const sessionToken = generateSecureToken();
+    // TODO: CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
     // Create session
@@ -284,16 +292,23 @@ export async function POST(request) {
     }, { status: 200 });
 
     // Set session cookie
+    // TODO: SECURITY - CRITICAL: Change sameSite from 'lax' to 'strict' for better CSRF protection
+    // TODO: SECURITY - Add domain validation and secure cookie configuration
+    // TODO: SECURITY - Consider shorter session duration for security
     response.cookies.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      // TODO: CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
       maxAge: 30 * 24 * 60 * 60 // 30 days
     });
 
     return response;
 
   } catch (error) {
+    // TODO: SECURITY - Don't log sensitive information in production
+    // TODO: LOGGING - Use proper logging framework instead of console.error
+    // TODO: MONITORING - Add error tracking and alerting
     console.error('Login error:', error);
     
     return NextResponse.json(

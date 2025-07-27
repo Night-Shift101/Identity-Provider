@@ -4,6 +4,7 @@
  * @author IdP System
  */
 
+// TODO: FUNCTIONALITY - Implement API versioning for backward compatibility
 import { NextResponse } from 'next/server';
 import { hashPassword, isValidEmail, validatePassword, generateSecureToken } from '@/lib/auth';
 import { userDb, prisma } from '@/lib/database';
@@ -12,6 +13,9 @@ import { logSecurityEvent } from '@/lib/security';
 
 export async function POST(request) {
   try {
+    // TODO: SECURITY - Add rate limiting for registration attempts
+    // TODO: SECURITY - Add CAPTCHA or similar anti-bot protection
+    // TODO: SECURITY - Implement account enumeration protection
     const { email, password, firstName, lastName, username } = await request.json();
 
     // Validate required fields

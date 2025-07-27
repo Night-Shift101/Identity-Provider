@@ -18,6 +18,8 @@ export default function MfaPage() {
   const inputRefs = useRef([]);
 
   useEffect(() => {
+    // TODO: SECURITY - Replace sessionStorage with secure server-side session management
+    // TODO: SECURITY - Add session timeout and CSRF protection
     // Get session ID from sessionStorage (set during login)
     const storedSessionId = sessionStorage.getItem('mfaSession');
     if (!storedSessionId) {
@@ -119,9 +121,12 @@ export default function MfaPage() {
       });
 
       if (response.ok) {
+        // TODO: UX - Replace alert() with proper toast notification system
+        // TODO: SECURITY - Add rate limiting for backup code regeneration
         alert('New backup codes have been sent to your email');
       }
     } catch (err) {
+      // TODO: LOGGING - Use proper logging framework instead of console.error
       console.error('Failed to resend backup codes:', err);
     }
   };
@@ -171,6 +176,7 @@ export default function MfaPage() {
                     onChange={(e) => handleInputChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
                     onPaste={handlePaste}
+                    // TODO: ACCESSIBILITY - Add aria-label for screen readers describing which digit position this is
                     className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     disabled={isLoading}
                   />

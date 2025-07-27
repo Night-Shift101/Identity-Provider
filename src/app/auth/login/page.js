@@ -79,6 +79,8 @@ export default function LoginPage() {
 
       // Check if MFA is required
       if (data.requiresMfa) {
+        // TODO: SECURITY - Don't store session data in sessionStorage, use secure httpOnly cookies
+        // TODO: SECURITY - Add CSRF protection for MFA flow
         // Store session temporarily and redirect to MFA
         sessionStorage.setItem('mfaSession', data.sessionId);
         router.push('/auth/mfa');

@@ -84,6 +84,9 @@ export default function DashboardPage() {
       }
     } catch (err) {
       setError('Failed to load profile');
+      // TODO: LOGGING - Use proper logging framework instead of console.error
+      // TODO: ERROR_HANDLING - Add user-friendly error messages
+      // TODO: UX - Show loading states and better error UI
       console.error('Profile fetch error:', err);
     } finally {
       setIsLoading(false);
@@ -185,6 +188,8 @@ export default function DashboardPage() {
         }
         
         // Clear success message after 5 seconds
+        // TODO: UX - Replace setTimeout with proper toast notification system
+        // TODO: ACCESSIBILITY - Announce success to screen readers
         setTimeout(() => setSuccessMessage(''), 5000);
       } else {
         setError(result.error || 'Failed to update profile');
@@ -213,6 +218,8 @@ export default function DashboardPage() {
         setError('');
         
         // Clear success message after 5 seconds
+        // TODO: UX - Replace setTimeout with proper toast notification system
+        // TODO: ACCESSIBILITY - Announce success to screen readers
         setTimeout(() => setSuccessMessage(''), 5000);
       } else {
         setError(result.error || 'Failed to send verification email');
@@ -787,6 +794,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-black">Recent Security Activity</h2>
+            {/* TODO: FUNCTIONALITY - Add pagination and search functionality for security logs */}
           </div>
           <div className="p-6">
             {securityLogs.length === 0 ? (
