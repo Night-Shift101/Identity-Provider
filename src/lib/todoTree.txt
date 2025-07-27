@@ -8,8 +8,6 @@
    │  │  │  │  │     ├─ line 14: TODO : SECURITY-Critical - Implement proper rate limiting with configurable thresholds
    │  │  │  │  │     ├─ line 37: TODO : SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
    │  │  │  │  │     ├─ line 38: TODO : SECURITY - Add rate limiting per IP address
-   │  │  │  │  │     ├─ line 39: TODO : SECURITY - Implement geolocation blocking for suspicious regions
-   │  │  │  │  │     ├─ line 57: TODO : SECURITY-Important - Implement structured error codes instead of plain text messages
    │  │  │  │  │     ├─ line 166: TODO : CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
    │  │  │  │  │     ├─ line 299: TODO : CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
    │  │  │  │  │     ├─ line 306: TODO : SECURITY - Don't log sensitive information in production

@@ -10,6 +10,7 @@ import { userDb, sessionDb, activityDb } from '@/lib/database';
 import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, logSecurityEvent, addTrustedDevice } from '@/lib/security';
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
 import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
+import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
 
 // TODO: SECURITY-Critical - Implement proper rate limiting with configurable thresholds
 export async function POST(request) {
@@ -26,7 +27,7 @@ export async function POST(request) {
     // Input validation and sanitization
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Invalid email or password format' },
+        createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS),
         { status: 400 }
       );
     }
@@ -35,7 +36,7 @@ export async function POST(request) {
     const sanitizedEmail = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sanitizedEmail)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid email format' },
+        createErrorResponse(ERROR_CODES.VALIDATION_INVALID_EMAIL),
         { status: 400 }
       );
     }
@@ -43,14 +44,14 @@ export async function POST(request) {
     // Validate optional parameters
     if (totpToken && (typeof totpToken !== 'string' || !/^\d{6}$/.test(totpToken))) {
       return NextResponse.json(
-        { success: false, error: 'Invalid TOTP token format' },
+        createErrorResponse(ERROR_CODES.VALIDATION_INVALID_TOTP),
         { status: 400 }
       );
     }
 
     if (backupCode && (typeof backupCode !== 'string' || !/^[a-zA-Z0-9]{8}$/.test(backupCode))) {
       return NextResponse.json(
-        { success: false, error: 'Invalid backup code format' },
+        createErrorResponse(ERROR_CODES.VALIDATION_INVALID_BACKUP_CODE),
         { status: 400 }
       );
     }
@@ -58,7 +59,7 @@ export async function POST(request) {
     // Validate required fields
     if (!sanitizedEmail || !password) {
       return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
+        createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS),
         { status: 400 }
       );
     }
@@ -84,8 +85,7 @@ export async function POST(request) {
       });
 
       return NextResponse.json(
-        // TODO: SECURITY-Important - Implement structured error codes instead of plain text messages
-        { success: false, error: 'Invalid email or password' },
+        createErrorResponse(ERROR_CODES.AUTH_INVALID_CREDENTIALS),
         { status: 401 }
       );
     }
