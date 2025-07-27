@@ -169,40 +169,43 @@ export function isValidEmail(email) {
 }
 
 /**
- * Validate password strength
+ * Validate password strength and requirements using advanced security checks
  * @param {string} password - Password to validate
- * @returns {{isValid: boolean, errors: string[]}} - Validation result
+ * @param {Object} options - Validation options
+ * @param {string} options.userId - User ID for password history check
+ * @param {Array<string>} options.passwordHistory - Previous password hashes
+ * @returns {{isValid: boolean, errors: Array<string>, warnings: Array<string>, strength: Object}}
  */
-export function validatePassword(password) {
-  // TODO: SECURITY - Add check against common password lists (rockyou.txt, etc.)
-  // TODO: SECURITY - Add password history check to prevent reuse
-  // TODO: SECURITY - Calculate password entropy score
-  // TODO: SECURITY - Add check for keyboard patterns (qwerty, 123456, etc.)
-  const errors = [];
+export function validatePassword(password, options = {}) {
+  // Import advanced password security module
+  const { 
+    validatePasswordSecurity, 
+    isPasswordReused,
+    analyzePasswordStrength 
+  } = require('./password-security');
   
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
-  }
+  const { userId, passwordHistory = [] } = options;
   
-  if (!/[A-Z]/.test(password)) {
-    errors.push('Password must contain at least one uppercase letter');
-  }
+  // Use advanced security validation
+  const securityResult = validatePasswordSecurity(password, {
+    minEntropy: 35, // Require decent entropy
+    blockCommon: true, // Block common passwords
+    blockPatterns: true // Block keyboard patterns
+  });
   
-  if (!/[a-z]/.test(password)) {
-    errors.push('Password must contain at least one lowercase letter');
-  }
-  
-  if (!/\d/.test(password)) {
-    errors.push('Password must contain at least one number');
-  }
-  
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    errors.push('Password must contain at least one special character');
+  // Check password reuse if user context is provided
+  if (userId && passwordHistory.length > 0) {
+    if (isPasswordReused(password, userId, passwordHistory)) {
+      securityResult.errors.push('Password has been used recently. Please choose a different password.');
+      securityResult.isValid = false;
+    }
   }
   
   return {
-    isValid: errors.length === 0,
-    errors
+    isValid: securityResult.isValid,
+    errors: securityResult.errors,
+    warnings: securityResult.warnings || [],
+    strength: securityResult.strength
   };
 }
 

@@ -45,6 +45,7 @@ model User {
   webauthnCreds    WebAuthnCredential[]
   securityLogs     SecurityLog[]
   emailTokens      EmailToken[]
+  passwordHistory  PasswordHistory[]
   
   @@map("users")
 }
@@ -140,6 +141,20 @@ model MfaSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("mfa_sessions")
+}
+
+// Password History for Security
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String   // Secure hash for comparison (not the actual bcrypt hash)
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@map("password_history")
 }
 
 // OAuth Account Linking

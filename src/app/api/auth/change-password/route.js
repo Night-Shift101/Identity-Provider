@@ -6,8 +6,9 @@
 
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth-helpers';
-import { userDb } from '@/lib/database';
+import { userDb, passwordHistoryDb } from '@/lib/database';
 import { hashPassword, verifyPassword, validatePassword } from '@/lib/auth';
+import { generatePasswordHash } from '@/lib/password-security';
 import { logSecurityEvent } from '@/lib/security';
 
 export async function POST(request) {
@@ -40,7 +41,18 @@ export async function POST(request) {
     }
 
     // Validate new password strength
-    const passwordValidation = validatePassword(newPassword);
+    const userId = authResult.data.user.id;
+    
+    // Get password history for reuse checking
+    const historyResult = await passwordHistoryDb.getUserPasswordHistory(userId, 5);
+    const passwordHistory = historyResult.success ? 
+      historyResult.data.map(entry => entry.passwordHash) : [];
+    
+    const passwordValidation = validatePassword(newPassword, {
+      userId,
+      passwordHistory
+    });
+    
     if (!passwordValidation.isValid) {
       return NextResponse.json({
         success: false,
@@ -48,7 +60,19 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    const userId = authResult.data.user.id;
+    // Log password strength warnings for security monitoring
+    if (passwordValidation.warnings && passwordValidation.warnings.length > 0) {
+      await logSecurityEvent({
+        userId,
+        event: 'password_change_warning',
+        details: {
+          warnings: passwordValidation.warnings,
+          strength: passwordValidation.strength
+        },
+        ipAddress: request.headers.get('x-forwarded-for') || '127.0.0.1',
+        userAgent: request.headers.get('user-agent') || ''
+      });
+    }
 
     // Get user with password to verify current password
     const userResult = await userDb.findById(userId);
@@ -93,14 +117,29 @@ export async function POST(request) {
 
     // Hash new password
     const hashedNewPassword = await hashPassword(newPassword);
+    if (!hashedNewPassword.success) {
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to process password'
+      }, { status: 500 });
+    }
 
     // Update password
-    const updateResult = await userDb.updatePassword(userId, hashedNewPassword);
+    const updateResult = await userDb.updatePassword(userId, hashedNewPassword.data);
     if (!updateResult.success) {
       return NextResponse.json({
         success: false,
         error: 'Failed to update password'
       }, { status: 500 });
+    }
+
+    // Add current password to history for future reuse prevention
+    const currentPasswordHash = generatePasswordHash(newPassword, userId);
+    const addHistoryResult = await passwordHistoryDb.addPasswordToHistory(userId, currentPasswordHash);
+    
+    // Clean old password history (keep last 10 passwords)
+    if (addHistoryResult.success) {
+      await passwordHistoryDb.cleanOldPasswordHistory(userId, 10);
     }
 
     // Log successful password change

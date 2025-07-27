@@ -409,4 +409,114 @@ export const activityDb = {
   }
 };
 
+/**
+ * Password History Database Operations
+ * Manages password history for security compliance
+ */
+export const passwordHistoryDb = {
+  /**
+   * Add password to history
+   * @param {string} userId - User ID
+   * @param {string} passwordHash - Password hash for comparison
+   * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+   */
+  async addPasswordToHistory(userId, passwordHash) {
+    try {
+      const historyEntry = await prisma.passwordHistory.create({
+        data: {
+          userId,
+          passwordHash,
+          createdAt: new Date()
+        }
+      });
+
+      return {
+        success: true,
+        error: null,
+        data: historyEntry
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message || 'Failed to add password to history',
+        data: null
+      };
+    }
+  },
+
+  /**
+   * Get user password history
+   * @param {string} userId - User ID
+   * @param {number} limit - Number of recent passwords to retrieve (default: 10)
+   * @returns {Promise<{success: boolean, error: string|null, data: Array}>}
+   */
+  async getUserPasswordHistory(userId, limit = 10) {
+    try {
+      const history = await prisma.passwordHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          passwordHash: true,
+          createdAt: true
+        }
+      });
+
+      return {
+        success: true,
+        error: null,
+        data: history
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message || 'Failed to retrieve password history',
+        data: null
+      };
+    }
+  },
+
+  /**
+   * Clean old password history entries
+   * @param {string} userId - User ID
+   * @param {number} keepCount - Number of recent passwords to keep (default: 10)
+   * @returns {Promise<{success: boolean, error: string|null, data: Object|null}>}
+   */
+  async cleanOldPasswordHistory(userId, keepCount = 10) {
+    try {
+      // Get IDs of entries to keep
+      const recentEntries = await prisma.passwordHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: keepCount,
+        select: { id: true }
+      });
+
+      const idsToKeep = recentEntries.map(entry => entry.id);
+
+      // Delete older entries
+      const deleteResult = await prisma.passwordHistory.deleteMany({
+        where: {
+          userId,
+          id: {
+            notIn: idsToKeep
+          }
+        }
+      });
+
+      return {
+        success: true,
+        error: null,
+        data: { deletedCount: deleteResult.count }
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message || 'Failed to clean password history',
+        data: null
+      };
+    }
+  }
+};
+
 export default prisma;

@@ -7,7 +7,8 @@
 // TODO: FUNCTIONALITY - Implement API versioning for backward compatibility
 import { NextResponse } from 'next/server';
 import { hashPassword, isValidEmail, validatePassword, generateSecureToken } from '@/lib/auth';
-import { userDb, prisma } from '@/lib/database';
+import { userDb, prisma, passwordHistoryDb } from '@/lib/database';
+import { generatePasswordHash } from '@/lib/password-security';
 import { sendEmailVerification } from '@/lib/email';
 import { logSecurityEvent } from '@/lib/security';
 import { checkRateLimit, recordRateLimitAttempt, getClientIPInfo } from '@/lib/rate-limit';
@@ -57,18 +58,38 @@ export async function POST(request) {
       );
     }
 
-    // Validate password strength
-    const passwordValidation = validatePassword(password);
+    // Validate password strength using advanced security checks
+    const passwordValidation = validatePassword(password, {
+      // No userId or password history for new registrations
+    });
+    
     if (!passwordValidation.isValid) {
       // Record failed attempt for rate limiting
       recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
       
       return NextResponse.json(
         createErrorResponse(ERROR_CODES.VALIDATION_INVALID_PASSWORD, 
-          'Password does not meet requirements', 
-          { details: passwordValidation.errors }),
+          'Password does not meet security requirements', 
+          { 
+            details: passwordValidation.errors,
+            strength: passwordValidation.strength 
+          }),
         { status: 400 }
       );
+    }
+
+    // Log password strength warnings for security monitoring
+    if (passwordValidation.warnings && passwordValidation.warnings.length > 0) {
+      await logSecurityEvent({
+        event: 'registration_password_warning',
+        details: {
+          email: email.toLowerCase(),
+          warnings: passwordValidation.warnings,
+          strength: passwordValidation.strength
+        },
+        ipAddress: clientIp,
+        userAgent
+      });
     }
 
     // Check if user already exists (account enumeration protection)
@@ -126,6 +147,12 @@ export async function POST(request) {
         { status: 500 }
       );
     }
+
+    const userId = userResult.data.id;
+
+    // Store initial password in history for future reuse prevention
+    const initialPasswordHash = generatePasswordHash(password, userId);
+    await passwordHistoryDb.addPasswordToHistory(userId, initialPasswordHash);
 
     // Generate email verification token
     const verificationToken = generateSecureToken();
