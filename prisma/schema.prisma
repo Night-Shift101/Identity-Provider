@@ -39,6 +39,7 @@ model User {
   sessions         Session[]
   loginActivity    LoginActivity[]
   trustedDevices   TrustedDevice[]
+  mfaSessions      MfaSession[]
   refreshTokens    RefreshToken[]
   oauthAccounts    OAuthAccount[]
   webauthnCreds    WebAuthnCredential[]
@@ -117,6 +118,28 @@ model TrustedDevice {
   @@index([userId])
   @@index([deviceHash])
   @@map("trusted_devices")
+}
+
+model MfaSession {
+  id            String    @id @default(uuid())
+  token         String    @unique // Secure random token
+  userId        String
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  isUsed        Boolean   @default(false)
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  lastAttemptAt DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("mfa_sessions")
 }
 
 // OAuth Account Linking

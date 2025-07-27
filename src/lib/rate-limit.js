@@ -60,6 +60,26 @@ const RATE_LIMIT_CONFIG = {
   DEVICE_REVOKE_PER_IP: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxAttempts: parseInt(process.env.RATE_LIMIT_DEVICE_REVOKE_MAX || '10'),
+  },
+  // MFA session creation per IP
+  MFA_SESSION_CREATE_PER_IP: {
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_MFA_SESSION_CREATE_MAX || '5'),
+  },
+  // MFA session validation per IP
+  MFA_SESSION_VALIDATE_PER_IP: {
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_MFA_SESSION_VALIDATE_MAX || '10'),
+  },
+  // MFA session completion per IP
+  MFA_SESSION_COMPLETE_PER_IP: {
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_MFA_SESSION_COMPLETE_MAX || '5'),
+  },
+  // MFA verification attempts per IP
+  MFA_VERIFY_PER_IP: {
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_MFA_VERIFY_MAX || '5'),
   }
 };
 

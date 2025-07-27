@@ -14,19 +14,36 @@ export default function MfaPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [sessionId, setSessionId] = useState('');
+  const [sessionData, setSessionData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    // TODO: SECURITY - Replace sessionStorage with secure server-side session management
-    // TODO: SECURITY - Add session timeout and CSRF protection
-    // Get session ID from sessionStorage (set during login)
-    const storedSessionId = sessionStorage.getItem('mfaSession');
-    if (!storedSessionId) {
-      router.push('/auth/login');
-      return;
-    }
-    setSessionId(storedSessionId);
+    // SECURITY FIX: Use secure server-side MFA session instead of sessionStorage
+    const validateMfaSession = async () => {
+      try {
+        const response = await fetch('/api/auth/mfa/session', {
+          method: 'GET',
+          credentials: 'include' // Include HTTP-only cookies
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          // No valid MFA session - redirect to login
+          router.push('/auth/login');
+          return;
+        }
+
+        setSessionData(result.data);
+        setLoading(false);
+      } catch (error) {
+        console.error('MFA session validation error:', error);
+        router.push('/auth/login');
+      }
+    };
+
+    validateMfaSession();
   }, [router]);
 
   const handleInputChange = (index, value) => {
@@ -63,12 +80,18 @@ export default function MfaPage() {
     }
   };
 
-  const handleSubmit = async (e, codeValue = null) => {
+    const handleSubmit = async (e, codeValue = null) => {
     if (e) e.preventDefault();
     
     const mfaCode = codeValue || code.join('');
     if (mfaCode.length !== 6) {
       setError('Please enter a 6-digit code');
+      return;
+    }
+
+    if (!sessionData) {
+      setError('Session expired. Please login again.');
+      router.push('/auth/login');
       return;
     }
 
@@ -81,43 +104,41 @@ export default function MfaPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include secure MFA session cookie
         body: JSON.stringify({
-          sessionId,
-          code: mfaCode
-        }),
+          code: mfaCode,
+          sessionId: sessionData.sessionId
+        })
       });
 
-      const data = await response.json();
+      const result = await response.json();
 
-      if (!response.ok) {
-        setError(data.error || 'Verification failed');
+      if (result.success) {
+        // MFA verification successful - redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        setError(result.error || 'Invalid verification code');
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
-        return;
       }
-
-      // Clear session storage
-      sessionStorage.removeItem('mfaSession');
-      
-      // Successful verification
-      router.push('/dashboard');
-    } catch (err) {
-      setError('Network error. Please try again.');
-      setCode(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+    } catch (error) {
+      console.error('MFA verification error:', error);
+      setError('Verification failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResendBackupCodes = async () => {
+    // TODO: SECURITY - Add rate limiting for backup code regeneration
     try {
       const response = await fetch('/api/auth/mfa/backup-codes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ sessionId }),
+        credentials: 'include',
+        body: JSON.stringify({ sessionId: sessionData?.sessionId }),
       });
 
       if (response.ok) {
@@ -130,6 +151,22 @@ export default function MfaPage() {
       console.error('Failed to resend backup codes:', err);
     }
   };
+
+  // Show loading state while validating MFA session
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Validating session...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

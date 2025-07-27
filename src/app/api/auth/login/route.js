@@ -10,6 +10,7 @@ import { userDb, sessionDb, activityDb } from '@/lib/database';
 import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, logSecurityEvent, addTrustedDevice } from '@/lib/security';
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
 import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
+import { createMfaSession } from '@/lib/mfa-sessions';
 import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
 import { checkRateLimit, recordRateLimitAttempt, resetRateLimit, getClientIP, getClientIPInfo } from '@/lib/rate-limit';
 
@@ -243,17 +244,41 @@ export async function POST(request) {
           );
         }
       } else {
-        // MFA required but not provided
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Multi-factor authentication required',
-            requireMFA: true,
-            isSuspicious,
-            suspiciousFlags: suspiciousCheck.data?.flags || []
-          },
-          { status: 200 }
+        // MFA required but not provided - create secure MFA session
+        const mfaSessionResult = await createMfaSession(
+          user.id,
+          request.headers.get('user-agent'),
+          clientIp
         );
+
+        if (!mfaSessionResult.success) {
+          console.error('Failed to create MFA session:', mfaSessionResult.error);
+          return NextResponse.json(
+            createErrorResponse(ERROR_CODES.INTERNAL_ERROR),
+            { status: 500 }
+          );
+        }
+
+        // Create response with MFA session
+        const response = NextResponse.json({
+          success: false,
+          error: 'Multi-factor authentication required',
+          requireMFA: true,
+          isSuspicious,
+          suspiciousFlags: suspiciousCheck.data?.flags || [],
+          mfaSessionId: mfaSessionResult.data.sessionId
+        }, { status: 200 });
+
+        // Set secure HTTP-only MFA session cookie
+        response.cookies.set('mfa-session', mfaSessionResult.data.mfaToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 10 * 60, // 10 minutes
+          path: '/auth/mfa'
+        });
+
+        return response;
       }
     }
 
