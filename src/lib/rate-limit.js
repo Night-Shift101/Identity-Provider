@@ -158,31 +158,188 @@ export function resetRateLimit(type, identifier) {
 }
 
 /**
- * Get client IP address from request
+ * Trusted proxy configuration
+ * Configure these based on your infrastructure
+ */
+const TRUSTED_PROXIES = [
+  '127.0.0.1',
+  '::1',
+  '10.0.0.0/8',
+  '172.16.0.0/12', 
+  '192.168.0.0/16',
+  // Add your load balancer/proxy IPs here
+  ...(process.env.TRUSTED_PROXIES ? process.env.TRUSTED_PROXIES.split(',').map(ip => ip.trim()) : [])
+];
+
+/**
+ * Check if IP is in CIDR range
+ * @param {string} ip - IP address to check
+ * @param {string} cidr - CIDR notation (e.g., '192.168.0.0/16')
+ * @returns {boolean} True if IP is in range
+ */
+function isIPInCIDR(ip, cidr) {
+  try {
+    if (!cidr.includes('/')) {
+      // Single IP comparison
+      return ip === cidr;
+    }
+
+    const [network, prefixLength] = cidr.split('/');
+    const prefixLengthNum = parseInt(prefixLength, 10);
+    
+    // Convert IPs to integers for comparison
+    const ipToInt = (ipStr) => {
+      return ipStr.split('.').reduce((acc, octet) => {
+        return (acc << 8) + parseInt(octet, 10);
+      }, 0) >>> 0; // Use unsigned 32-bit integer
+    };
+
+    const ipInt = ipToInt(ip);
+    const networkInt = ipToInt(network);
+    const mask = (0xFFFFFFFF << (32 - prefixLengthNum)) >>> 0;
+
+    return (ipInt & mask) === (networkInt & mask);
+  } catch (error) {
+    console.error('CIDR check error:', error);
+    return false;
+  }
+}
+
+/**
+ * Check if IP is from a trusted proxy
+ * @param {string} ip - IP address to check
+ * @returns {boolean} True if IP is trusted
+ */
+function isTrustedProxy(ip) {
+  if (!ip) return false;
+  
+  return TRUSTED_PROXIES.some(trustedRange => isIPInCIDR(ip, trustedRange));
+}
+
+/**
+ * Validate IP address format
+ * @param {string} ip - IP address to validate
+ * @returns {boolean} True if valid IPv4 address
+ */
+function isValidIPv4(ip) {
+  if (!ip || typeof ip !== 'string') return false;
+  
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipv4Regex.test(ip);
+}
+
+/**
+ * Sanitize and validate IP address
+ * @param {string} ip - Raw IP address
+ * @returns {string|null} Sanitized IP or null if invalid
+ */
+function sanitizeIP(ip) {
+  if (!ip || typeof ip !== 'string') return null;
+  
+  // Remove any whitespace and quotes
+  const cleaned = ip.trim().replace(/['"]/g, '');
+  
+  // Basic validation
+  if (!isValidIPv4(cleaned)) return null;
+  
+  // Check for private/reserved ranges that shouldn't be trusted
+  const parts = cleaned.split('.').map(Number);
+  
+  // Reject obviously invalid IPs
+  if (parts.some(part => isNaN(part) || part < 0 || part > 255)) {
+    return null;
+  }
+  
+  return cleaned;
+}
+
+/**
+ * Get client IP address from request with trusted proxy validation
+ * @param {Request} request - Next.js request object
+ * @returns {{ ip: string, trusted: boolean, source: string }}
+ */
+export function getClientIPInfo(request) {
+  const defaultResult = { 
+    ip: '127.0.0.1', 
+    trusted: false, 
+    source: 'default' 
+  };
+
+  try {
+    // Get potential IP sources in order of preference
+    const xForwardedFor = request.headers.get('x-forwarded-for');
+    const xRealIP = request.headers.get('x-real-ip');
+    const cfConnectingIP = request.headers.get('cf-connecting-ip');
+    const xClientIP = request.headers.get('x-client-ip');
+    
+    // Check Cloudflare first (most trusted if using CF)
+    if (cfConnectingIP) {
+      const sanitizedIP = sanitizeIP(cfConnectingIP);
+      if (sanitizedIP) {
+        return {
+          ip: sanitizedIP,
+          trusted: true,
+          source: 'cloudflare'
+        };
+      }
+    }
+
+    // Check X-Real-IP (usually set by nginx)
+    if (xRealIP) {
+      const sanitizedIP = sanitizeIP(xRealIP);
+      if (sanitizedIP) {
+        return {
+          ip: sanitizedIP,
+          trusted: isTrustedProxy(request.headers.get('host') || ''),
+          source: 'x-real-ip'
+        };
+      }
+    }
+
+    // Check X-Client-IP
+    if (xClientIP) {
+      const sanitizedIP = sanitizeIP(xClientIP);
+      if (sanitizedIP) {
+        return {
+          ip: sanitizedIP,
+          trusted: isTrustedProxy(request.headers.get('host') || ''),
+          source: 'x-client-ip'
+        };
+      }
+    }
+
+    // Check X-Forwarded-For (can contain multiple IPs)
+    if (xForwardedFor) {
+      const ips = xForwardedFor.split(',').map(ip => ip.trim());
+      
+      for (const ip of ips) {
+        const sanitizedIP = sanitizeIP(ip);
+        if (sanitizedIP && !isTrustedProxy(sanitizedIP)) {
+          // Found first non-proxy IP
+          return {
+            ip: sanitizedIP,
+            trusted: true, // We trust the proxy chain
+            source: 'x-forwarded-for'
+          };
+        }
+      }
+    }
+
+    return defaultResult;
+  } catch (error) {
+    console.error('IP extraction error:', error);
+    return defaultResult;
+  }
+}
+
+/**
+ * Get client IP address from request (legacy function for backward compatibility)
  * @param {Request} request - Next.js request object
  * @returns {string} Client IP address
  */
 export function getClientIP(request) {
-  // Check various headers for the real IP
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIP = request.headers.get('x-real-ip');
-  const cfConnectingIP = request.headers.get('cf-connecting-ip');
-  
-  if (forwarded) {
-    // x-forwarded-for can contain multiple IPs, get the first one
-    return forwarded.split(',')[0].trim();
-  }
-  
-  if (realIP) {
-    return realIP.trim();
-  }
-  
-  if (cfConnectingIP) {
-    return cfConnectingIP.trim();
-  }
-  
-  // Fallback to localhost (for development)
-  return '127.0.0.1';
+  const ipInfo = getClientIPInfo(request);
+  return ipInfo.ip;
 }
 
 /**

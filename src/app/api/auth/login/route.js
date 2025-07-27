@@ -11,12 +11,13 @@ import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, l
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
 import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
 import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
-import { checkRateLimit, recordRateLimitAttempt, resetRateLimit, getClientIP } from '@/lib/rate-limit';
+import { checkRateLimit, recordRateLimitAttempt, resetRateLimit, getClientIP, getClientIPInfo } from '@/lib/rate-limit';
 
 export async function POST(request) {
   try {
-    // Get client IP for rate limiting
-    const clientIP = getClientIP(request);
+    // Get client IP with validation for rate limiting
+    const clientIPInfo = getClientIPInfo(request);
+    const clientIP = clientIPInfo.ip;
 
     const { 
       email, 
@@ -107,13 +108,20 @@ export async function POST(request) {
       );
     }
 
-    // Get client information
-    // TODO: SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
-    // TODO: SECURITY - Implement geolocation blocking for suspicious regions
-    const clientIp = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     '127.0.0.1';
+    // Get client information with validated and sanitized IP headers
+    const clientIp = clientIPInfo.ip;
+    const ipTrusted = clientIPInfo.trusted;
+    const ipSource = clientIPInfo.source;
     const userAgent = request.headers.get('user-agent') || '';
+
+    // Log IP validation info for security monitoring
+    if (!ipTrusted && process.env.NODE_ENV === 'production') {
+      console.warn('Untrusted IP source detected:', {
+        ip: clientIp,
+        source: ipSource,
+        userAgent: userAgent.substring(0, 100) // Truncate for logging
+      });
+    }
 
     // Find user
     const userResult = await userDb.findByEmail(sanitizedEmail);

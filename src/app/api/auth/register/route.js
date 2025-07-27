@@ -10,26 +10,49 @@ import { hashPassword, isValidEmail, validatePassword, generateSecureToken } fro
 import { userDb, prisma } from '@/lib/database';
 import { sendEmailVerification } from '@/lib/email';
 import { logSecurityEvent } from '@/lib/security';
+import { checkRateLimit, recordRateLimitAttempt, getClientIPInfo } from '@/lib/rate-limit';
+import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
 
 export async function POST(request) {
   try {
-    // TODO: SECURITY - Add rate limiting for registration attempts
-    // TODO: SECURITY - Add CAPTCHA or similar anti-bot protection
-    // TODO: SECURITY - Implement account enumeration protection
+    // Get client IP with validation
+    const clientIPInfo = getClientIPInfo(request);
+    const clientIP = clientIPInfo.ip;
+
+    // Rate limiting - Check registration attempts per IP
+    const ipRateLimit = checkRateLimit('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+    if (!ipRateLimit.success) {
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.RATE_LIMIT_EXCEEDED, ipRateLimit.error),
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': ipRateLimit.data?.retryAfter?.toString() || '3600'
+          }
+        }
+      );
+    }
+
     const { email, password, firstName, lastName, username } = await request.json();
 
     // Validate required fields
     if (!email || !password) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
+        createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS),
         { status: 400 }
       );
     }
 
     // Validate email format
     if (!isValidEmail(email)) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Invalid email format' },
+        createErrorResponse(ERROR_CODES.VALIDATION_INVALID_EMAIL),
         { status: 400 }
       );
     }
@@ -37,22 +60,27 @@ export async function POST(request) {
     // Validate password strength
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Password does not meet requirements',
-          details: passwordValidation.errors
-        },
+        createErrorResponse(ERROR_CODES.VALIDATION_INVALID_PASSWORD, 
+          'Password does not meet requirements', 
+          { details: passwordValidation.errors }),
         { status: 400 }
       );
     }
 
-    // Check if user already exists
+    // Check if user already exists (account enumeration protection)
     const existingUser = await userDb.findByEmail(email);
     if (existingUser.success && existingUser.data) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+      
+      // Don't reveal that user exists (account enumeration protection)
       return NextResponse.json(
-        { success: false, error: 'User already exists with this email' },
-        { status: 409 }
+        createSuccessResponse('Registration successful. Please check your email to verify your account.'),
+        { status: 200 }
       );
     }
 
@@ -63,8 +91,11 @@ export async function POST(request) {
       });
       
       if (existingUsername) {
+        // Record failed attempt for rate limiting
+        recordRateLimitAttempt('REGISTRATION_ATTEMPTS_PER_IP', clientIP);
+        
         return NextResponse.json(
-          { success: false, error: 'Username is already taken' },
+          createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS, 'Username is already taken'),
           { status: 409 }
         );
       }
@@ -119,9 +150,7 @@ export async function POST(request) {
     );
 
     // Log security event
-    const clientIp = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     '127.0.0.1';
+    // Log security event with validated IP
     const userAgent = request.headers.get('user-agent') || '';
 
     await logSecurityEvent({
@@ -129,9 +158,11 @@ export async function POST(request) {
       event: 'user_registration',
       details: {
         email: email.toLowerCase(),
-        emailSent: emailResult.success
+        emailSent: emailResult.success,
+        ipTrusted: clientIPInfo.trusted,
+        ipSource: clientIPInfo.source
       },
-      ipAddress: clientIp,
+      ipAddress: clientIP,
       userAgent
     });
 

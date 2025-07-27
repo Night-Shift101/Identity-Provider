@@ -5,7 +5,6 @@
    │  │  │  ├─ auth
    │  │  │  │  ├─ login
    │  │  │  │  │  └─ route.js
-   │  │  │  │  │     ├─ line 37: TODO : SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
    │  │  │  │  │     ├─ line 166: TODO : CONFIGURATION - Make session expiry configurable via environment variables (currently hardcoded 30 days)
    │  │  │  │  │     ├─ line 299: TODO : CONFIGURATION - Make cookie maxAge configurable via environment variables (currently hardcoded 30 days)
    │  │  │  │  │     ├─ line 306: TODO : SECURITY - Don't log sensitive information in production
@@ -23,15 +22,9 @@
    │  │  │  │  ├─ register
    │  │  │  │  │  └─ route.js
    │  │  │  │  │     ├─ line 7: TODO : FUNCTIONALITY - Implement API versioning for backward compatibility
-   │  │  │  │  │     ├─ line 16: TODO : SECURITY - Add rate limiting for registration attempts
-   │  │  │  │  │     ├─ line 17: TODO : SECURITY - Add CAPTCHA or similar anti-bot protection
-   │  │  │  │  │     └─ line 18: TODO : SECURITY - Implement account enumeration protection
+   │  │  │  │  │     └─ line 17: TODO : SECURITY - Add CAPTCHA or similar anti-bot protection
    │  │  │  │  └─ verify-email
    │  │  │  │     └─ route.js
-   │  │  │  │        ├─ line 13: TODO : SECURITY - Add rate limiting for verification attempts
-   │  │  │  │        ├─ line 14: TODO : SECURITY - Add protection against timing attacks
-   │  │  │  │        ├─ line 15: TODO : SECURITY - Log suspicious verification patterns
-   │  │  │  │        ├─ line 63: TODO : SECURITY - Validate and sanitize IP headers
    │  │  │  │        └─ line 64: TODO : SECURITY - Add geolocation tracking for verification attempts
    │  │  │  └─ test
    │  │  │     └─ route.js

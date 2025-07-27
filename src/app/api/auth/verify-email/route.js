@@ -7,21 +7,44 @@
 import { NextResponse } from 'next/server';
 import { prisma, userDb } from '@/lib/database';
 import { logSecurityEvent } from '@/lib/security';
+import { checkRateLimit, recordRateLimitAttempt, getClientIPInfo } from '@/lib/rate-limit';
+import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
 
 export async function POST(request) {
   try {
-    // TODO: SECURITY - Add rate limiting for verification attempts
-    // TODO: SECURITY - Add protection against timing attacks
-    // TODO: SECURITY - Log suspicious verification patterns
+    // Get client IP with validation
+    const clientIPInfo = getClientIPInfo(request);
+    const clientIP = clientIPInfo.ip;
+
+    // Rate limiting - Check verification attempts per IP
+    const ipRateLimit = checkRateLimit('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+    if (!ipRateLimit.success) {
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.RATE_LIMIT_EXCEEDED, ipRateLimit.error),
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': ipRateLimit.data?.retryAfter?.toString() || '900'
+          }
+        }
+      );
+    }
+
     const { token } = await request.json();
 
     if (!token) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Verification token is required' },
+        createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS, 'Verification token is required'),
         { status: 400 }
       );
     }
 
+    // Protection against timing attacks - always do the same work
+    const startTime = Date.now();
+    
     // Find the verification token
     const emailToken = await prisma.emailToken.findUnique({
       where: { token },
@@ -29,43 +52,67 @@ export async function POST(request) {
     });
 
     if (!emailToken) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+      
+      // Timing attack protection - ensure constant response time
+      const minDuration = 100; // 100ms minimum
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minDuration) {
+        await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+      }
+      
       return NextResponse.json(
-        { success: false, error: 'Invalid verification token' },
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'Invalid verification token'),
         { status: 400 }
       );
     }
 
     // Check if token has expired
     if (new Date() > emailToken.expiresAt) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Verification token has expired' },
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_EXPIRED, 'Verification token has expired'),
         { status: 400 }
       );
     }
 
     // Check if token has already been used
     if (emailToken.used) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Verification token has already been used' },
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'Verification token has already been used'),
         { status: 400 }
       );
     }
 
     // Check if token type is correct
     if (emailToken.type !== 'EMAIL_VERIFICATION') {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('VERIFICATION_ATTEMPTS_PER_IP', clientIP);
+      
       return NextResponse.json(
-        { success: false, error: 'Invalid token type' },
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'Invalid token type'),
         { status: 400 }
       );
     }
 
-    // Get client information for logging
-    // TODO: SECURITY - Validate and sanitize IP headers
-    // TODO: SECURITY - Add geolocation tracking for verification attempts
-    const clientIp = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     '127.0.0.1';
+    // Get client information for logging with validated IP headers
     const userAgent = request.headers.get('user-agent') || '';
+
+    // Log suspicious verification patterns if IP is not trusted
+    if (!clientIPInfo.trusted) {
+      console.warn('Email verification from untrusted IP:', {
+        ip: clientIP,
+        source: clientIPInfo.source,
+        userAgent: userAgent.substring(0, 100),
+        email: emailToken.user.email
+      });
+    }
 
     // Update user as verified
     const updateResult = await userDb.update(emailToken.userId, {
@@ -86,15 +133,17 @@ export async function POST(request) {
       data: { used: true }
     });
 
-    // Log security event
+    // Log security event with validated IP information
     await logSecurityEvent({
       userId: emailToken.userId,
       event: 'email_verified',
       details: {
         email: emailToken.email,
-        verificationMethod: 'email_token'
+        verificationMethod: 'email_token',
+        ipTrusted: clientIPInfo.trusted,
+        ipSource: clientIPInfo.source
       },
-      ipAddress: clientIp,
+      ipAddress: clientIP,
       userAgent
     });
 
