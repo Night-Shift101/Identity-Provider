@@ -11,10 +11,13 @@ import { checkSuspiciousActivity, createDeviceFingerprint, checkTrustedDevice, l
 import { sendLoginNotification, sendSecurityAlert } from '@/lib/email';
 import { verifyTotpToken, verifyBackupCode } from '@/lib/mfa';
 import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
+import { checkRateLimit, recordRateLimitAttempt, resetRateLimit, getClientIP } from '@/lib/rate-limit';
 
-// TODO: SECURITY-Critical - Implement proper rate limiting with configurable thresholds
 export async function POST(request) {
   try {
+    // Get client IP for rate limiting
+    const clientIP = getClientIP(request);
+
     const { 
       email, 
       password, 
@@ -41,8 +44,40 @@ export async function POST(request) {
       );
     }
 
+    // Rate limiting - Check IP-based rate limit
+    const ipRateLimit = checkRateLimit('LOGIN_ATTEMPTS_PER_IP', clientIP);
+    if (!ipRateLimit.success) {
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.RATE_LIMIT_EXCEEDED, ipRateLimit.error),
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': ipRateLimit.data?.retryAfter?.toString() || '60'
+          }
+        }
+      );
+    }
+
+    // Rate limiting - Check email-based rate limit
+    const emailRateLimit = checkRateLimit('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+    if (!emailRateLimit.success) {
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.RATE_LIMIT_EXCEEDED, emailRateLimit.error),
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': emailRateLimit.data?.retryAfter?.toString() || '60'
+          }
+        }
+      );
+    }
+
     // Validate optional parameters
     if (totpToken && (typeof totpToken !== 'string' || !/^\d{6}$/.test(totpToken))) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+      
       return NextResponse.json(
         createErrorResponse(ERROR_CODES.VALIDATION_INVALID_TOTP),
         { status: 400 }
@@ -50,6 +85,10 @@ export async function POST(request) {
     }
 
     if (backupCode && (typeof backupCode !== 'string' || !/^[a-zA-Z0-9]{8}$/.test(backupCode))) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+      
       return NextResponse.json(
         createErrorResponse(ERROR_CODES.VALIDATION_INVALID_BACKUP_CODE),
         { status: 400 }
@@ -58,6 +97,10 @@ export async function POST(request) {
 
     // Validate required fields
     if (!sanitizedEmail || !password) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+      
       return NextResponse.json(
         createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS),
         { status: 400 }
@@ -66,7 +109,6 @@ export async function POST(request) {
 
     // Get client information
     // TODO: SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
-    // TODO: SECURITY - Add rate limiting per IP address
     // TODO: SECURITY - Implement geolocation blocking for suspicious regions
     const clientIp = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
@@ -76,6 +118,10 @@ export async function POST(request) {
     // Find user
     const userResult = await userDb.findByEmail(sanitizedEmail);
     if (!userResult.success || !userResult.data) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+      
       // Log failed login attempt
       await logSecurityEvent({
         event: 'login_failed',
@@ -94,6 +140,10 @@ export async function POST(request) {
 
     // Check if user is active
     if (!user.isActive) {
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+      recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+      
       await logSecurityEvent({
         userId: user.id,
         event: 'login_blocked',
@@ -103,7 +153,7 @@ export async function POST(request) {
       });
 
       return NextResponse.json(
-        { success: false, error: 'Account is inactive' },
+        createErrorResponse(ERROR_CODES.AUTH_ACCOUNT_DISABLED),
         { status: 403 }
       );
     }
@@ -112,6 +162,10 @@ export async function POST(request) {
     if (user.password) {
       const passwordResult = await verifyPassword(password, user.password);
       if (!passwordResult.success || !passwordResult.data) {
+        // Record failed attempt for rate limiting
+        recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+        recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+        
         // Log failed login attempt
         await logSecurityEvent({
           userId: user.id,
@@ -122,7 +176,7 @@ export async function POST(request) {
         });
 
         return NextResponse.json(
-          { success: false, error: 'Invalid email or password' },
+          createErrorResponse(ERROR_CODES.AUTH_PASSWORD_INCORRECT),
           { status: 401 }
         );
       }
@@ -163,6 +217,10 @@ export async function POST(request) {
         }
 
         if (!mfaValid) {
+          // Record failed attempt for rate limiting
+          recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_IP', clientIP);
+          recordRateLimitAttempt('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
+          
           await logSecurityEvent({
             userId: user.id,
             event: 'mfa_failed',
@@ -172,7 +230,7 @@ export async function POST(request) {
           });
 
           return NextResponse.json(
-            { success: false, error: 'Invalid MFA token', requireMFA: true },
+            createErrorResponse(ERROR_CODES.AUTH_MFA_INVALID),
             { status: 401 }
           );
         }
@@ -301,6 +359,10 @@ export async function POST(request) {
       ipAddress: clientIp,
       userAgent
     });
+
+    // Reset rate limits on successful authentication
+    resetRateLimit('LOGIN_ATTEMPTS_PER_IP', clientIP);
+    resetRateLimit('LOGIN_ATTEMPTS_PER_EMAIL', sanitizedEmail);
 
     // Prepare response
     const response = NextResponse.json({
