@@ -30,6 +30,11 @@ const RATE_LIMIT_CONFIG = {
   VERIFICATION_ATTEMPTS_PER_IP: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     maxAttempts: parseInt(process.env.RATE_LIMIT_VERIFY_IP_MAX || '10'),
+  },
+  // OAuth operations per IP
+  OAUTH_ATTEMPTS_PER_IP: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxAttempts: parseInt(process.env.RATE_LIMIT_OAUTH_IP_MAX || '20'),
   }
 };
 

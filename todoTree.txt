@@ -13,11 +13,7 @@
    │  │  │  │  ├─ oauth
    │  │  │  │  │  └─ route.js
    │  │  │  │  │     ├─ line 13: TODO : SECURITY - Move OAuth credentials to secure configuration service
-   │  │  │  │  │     ├─ line 14: TODO : SECURITY - Add OAuth state parameter validation to prevent CSRF
-   │  │  │  │  │     ├─ line 15: TODO : SECURITY - Implement OAuth PKCE for enhanced security
-   │  │  │  │  │     ├─ line 135: TODO : SECURITY-Critical - Implement PKCE for OAuth2 flows to prevent authorization code interception
-   │  │  │  │  │     ├─ line 182: TODO : SECURITY - Add state parameter validation to prevent CSRF attacks
-   │  │  │  │  │     ├─ line 183: TODO : SECURITY - Implement nonce validation for OpenID Connect
+   │  │  │  │  │     ├─ line 15: TODO : PERFORMANCE - Replace in-memory PKCE store with Redis for production scalability
    │  │  │  │  │     └─ line 184: TODO : ERROR_HANDLING - Add proper OAuth error handling and user feedback
    │  │  │  │  ├─ register
    │  │  │  │  │  └─ route.js
@@ -83,6 +79,9 @@
    │  │     ├─ line 31: TODO : UX - Add user-friendly error messages for different error types
    │  │     └─ line 32: TODO : ERROR_HANDLING - Handle specific WebAuthn error codes
    │  ├─ lib
+   │  │  ├─ rate-limit.js
+   │  │  │  └─ line 6: TODO : PERFORMANCE - Replace in-memory rate limit store with Redis for production scalability
+   │  │  └─ oauth-pkce.js
    │  │  ├─ auth.js
    │  │  │  ├─ line 68: TODO : SECURITY - Consider rotating JWT secrets and key versioning
    │  │  │  ├─ line 102: TODO : SECURITY - Implement token blacklisting for logout/revocation

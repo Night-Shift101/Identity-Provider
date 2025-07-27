@@ -8,6 +8,24 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth-helpers';
 import { userDb, prisma } from '@/lib/database';
 import { logSecurityEvent } from '@/lib/security';
+import { generatePKCEParams, generateOAuthState, validateOAuthState, verifyPKCE } from '@/lib/oauth-pkce';
+import { checkRateLimit, recordRateLimitAttempt, getClientIPInfo } from '@/lib/rate-limit';
+import { ERROR_CODES, createErrorResponse, createSuccessResponse } from '@/lib/error-codes';
+
+// Temporary in-memory storage for PKCE parameters (in production, use Redis)
+const pkceStore = new Map();
+
+// Cleanup expired PKCE entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 10 * 60 * 1000; // 10 minutes
+  
+  for (const [key, data] of pkceStore.entries()) {
+    if (now - data.timestamp > maxAge) {
+      pkceStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
 
 // OAuth Provider configurations
 // TODO: SECURITY - Move OAuth credentials to secure configuration service
@@ -77,22 +95,46 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    // Get client IP for rate limiting
+    const clientIPInfo = getClientIPInfo(request);
+    const clientIP = clientIPInfo.ip;
+
+    // Rate limiting for OAuth operations
+    const ipRateLimit = checkRateLimit('OAUTH_ATTEMPTS_PER_IP', clientIP);
+    if (!ipRateLimit.success) {
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.RATE_LIMIT_EXCEEDED, ipRateLimit.error),
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': ipRateLimit.data?.retryAfter?.toString() || '300'
+          }
+        }
+      );
+    }
+
     // Get authenticated user
     const authResult = await getAuthenticatedUser(request);
     if (!authResult.success) {
-      return NextResponse.json({
-        success: false,
-        error: authResult.error || 'Authentication required'
-      }, { status: 401 });
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('OAUTH_ATTEMPTS_PER_IP', clientIP);
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.AUTH_SESSION_EXPIRED, authResult.error || 'Authentication required'),
+        { status: 401 }
+      );
     }
 
     const { action, provider, code, state } = await request.json();
 
     if (!OAUTH_PROVIDERS[provider]) {
-      return NextResponse.json({
-        success: false,
-        error: 'Unsupported OAuth provider'
-      }, { status: 400 });
+      // Record failed attempt for rate limiting
+      recordRateLimitAttempt('OAUTH_ATTEMPTS_PER_IP', clientIP);
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.VALIDATION_MISSING_FIELDS, 'Unsupported OAuth provider'),
+        { status: 400 }
+      );
     }
 
     const userId = authResult.data.user.id;
@@ -126,19 +168,35 @@ export async function POST(request) {
 async function handleGetAuthUrl(provider, userId) {
   try {
     const config = OAUTH_PROVIDERS[provider];
-    const state = Buffer.from(JSON.stringify({ 
+    
+    // Generate PKCE parameters for enhanced security
+    const pkceParams = generatePKCEParams();
+    
+    // Generate secure state parameter
+    const state = generateOAuthState({ 
       userId, 
-      provider, 
-      timestamp: Date.now() 
-    })).toString('base64');
+      provider,
+      action: 'link-account'
+    });
+    
+    // Store PKCE parameters temporarily (keyed by state for retrieval)
+    pkceStore.set(state, {
+      codeVerifier: pkceParams.codeVerifier,
+      codeChallenge: pkceParams.codeChallenge,
+      userId,
+      provider,
+      timestamp: Date.now()
+    });
 
-    // TODO: SECURITY-Critical - Implement PKCE for OAuth2 flows to prevent authorization code interception
+    // Build authorization URL with PKCE parameters
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: `${process.env.APP_URL}/api/auth/oauth/callback`,
       response_type: 'code',
       scope: config.scope,
-      state
+      state,
+      code_challenge: pkceParams.codeChallenge,
+      code_challenge_method: pkceParams.codeChallengeMethod
     });
 
     const authUrl = `${config.authUrl}?${params.toString()}`;
@@ -149,39 +207,71 @@ async function handleGetAuthUrl(provider, userId) {
     });
 
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to generate auth URL'
-    }, { status: 500 });
+    console.error('OAuth URL generation error:', error);
+    return NextResponse.json(
+      createErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'Failed to generate auth URL'),
+      { status: 500 }
+    );
   }
 }
 
 async function handleLinkAccount(provider, code, state, userId, request) {
   try {
-    // Verify state parameter
-    let stateData;
-    try {
-      stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: 'Invalid state parameter'
-      }, { status: 400 });
+    // Get client IP for security logging
+    const clientIPInfo = getClientIPInfo(request);
+    
+    // Validate state parameter with enhanced security
+    const stateValidation = validateOAuthState(state);
+    if (!stateValidation.success) {
+      console.warn('OAuth state validation failed:', {
+        error: stateValidation.error,
+        ip: clientIPInfo.ip,
+        provider
+      });
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'Invalid state parameter'),
+        { status: 400 }
+      );
     }
 
+    const stateData = stateValidation.data;
+    
+    // Verify state data matches request
     if (stateData.userId !== userId || stateData.provider !== provider) {
-      return NextResponse.json({
-        success: false,
-        error: 'State validation failed'
-      }, { status: 400 });
+      console.warn('OAuth state mismatch:', {
+        expected: { userId, provider },
+        received: { userId: stateData.userId, provider: stateData.provider },
+        ip: clientIPInfo.ip
+      });
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'State validation failed'),
+        { status: 400 }
+      );
     }
 
-    // Exchange code for access token
+    // Retrieve and verify PKCE parameters
+    const pkceData = pkceStore.get(state);
+    if (!pkceData) {
+      console.warn('PKCE data not found for state:', {
+        state: state.substring(0, 10) + '...',
+        ip: clientIPInfo.ip,
+        provider
+      });
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.AUTH_TOKEN_INVALID, 'PKCE validation failed'),
+        { status: 400 }
+      );
+    }
+
+    // Clean up PKCE data immediately after retrieval
+    pkceStore.delete(state);
+
+    // Exchange code for access token with PKCE verification
     const config = OAUTH_PROVIDERS[provider];
-    // Validate and exchange authorization code for access token
-    // TODO: SECURITY - Add state parameter validation to prevent CSRF attacks
-    // TODO: SECURITY - Implement nonce validation for OpenID Connect
-    // TODO: ERROR_HANDLING - Add proper OAuth error handling and user feedback
+    
     const tokenResponse = await fetch(config.tokenUrl, {
       method: 'POST',
       headers: {
@@ -191,15 +281,26 @@ async function handleLinkAccount(provider, code, state, userId, request) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: `${process.env.APP_URL}/api/auth/oauth/callback`
+        redirect_uri: `${process.env.APP_URL}/api/auth/oauth/callback`,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code_verifier: pkceData.codeVerifier // PKCE verification
       })
     });
 
     if (!tokenResponse.ok) {
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to exchange authorization code'
-      }, { status: 400 });
+      const errorText = await tokenResponse.text();
+      console.error('OAuth token exchange failed:', {
+        status: tokenResponse.status,
+        error: errorText,
+        provider,
+        ip: clientIPInfo.ip
+      });
+      
+      return NextResponse.json(
+        createErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'Failed to exchange authorization code'),
+        { status: 400 }
+      );
     }
 
     const tokenData = await tokenResponse.json();
