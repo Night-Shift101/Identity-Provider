@@ -6,7 +6,6 @@
    │  │  │  │  ├─ login
    │  │  │  │  │  └─ route.js
    │  │  │  │  │     ├─ line 14: TODO : SECURITY-Critical - Implement proper rate limiting with configurable thresholds
-   │  │  │  │  │     ├─ line 26: TODO : SECURITY-Important - Add input sanitization and validation for all parameters
    │  │  │  │  │     ├─ line 37: TODO : SECURITY - CRITICAL: Validate and sanitize IP headers, implement trusted proxy config
    │  │  │  │  │     ├─ line 38: TODO : SECURITY - Add rate limiting per IP address
    │  │  │  │  │     ├─ line 39: TODO : SECURITY - Implement geolocation blocking for suspicious regions

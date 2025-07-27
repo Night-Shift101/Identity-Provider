@@ -23,10 +23,40 @@ export async function POST(request) {
       deviceFingerprint 
     } = await request.json();
 
-    // TODO: SECURITY-Important - Add input sanitization and validation for all parameters
+    // Input validation and sanitization
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password format' },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize email and validate format
+    const sanitizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sanitizedEmail)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate optional parameters
+    if (totpToken && (typeof totpToken !== 'string' || !/^\d{6}$/.test(totpToken))) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid TOTP token format' },
+        { status: 400 }
+      );
+    }
+
+    if (backupCode && (typeof backupCode !== 'string' || !/^[a-zA-Z0-9]{8}$/.test(backupCode))) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid backup code format' },
+        { status: 400 }
+      );
+    }
 
     // Validate required fields
-    if (!email || !password) {
+    if (!sanitizedEmail || !password) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required' },
         { status: 400 }
@@ -43,12 +73,12 @@ export async function POST(request) {
     const userAgent = request.headers.get('user-agent') || '';
 
     // Find user
-    const userResult = await userDb.findByEmail(email.toLowerCase());
+    const userResult = await userDb.findByEmail(sanitizedEmail);
     if (!userResult.success || !userResult.data) {
       // Log failed login attempt
       await logSecurityEvent({
         event: 'login_failed',
-        details: { email: email.toLowerCase(), reason: 'user_not_found' },
+        details: { email: sanitizedEmail, reason: 'user_not_found' },
         ipAddress: clientIp,
         userAgent
       });
